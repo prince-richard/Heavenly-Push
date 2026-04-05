@@ -8,8 +8,9 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useRoute } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { useSettingsStore } from '@/stores/useSettingsStore';
@@ -21,11 +22,13 @@ import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
 
 type PlanDetailRoute = RouteProp<RootStackParamList, 'PlanDetail'>;
+type PlanDetailNav = NativeStackNavigationProp<RootStackParamList>;
 
 export function PlanDetailScreen() {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
   const route = useRoute<PlanDetailRoute>();
+  const navigation = useNavigation<PlanDetailNav>();
   const { planId } = route.params;
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
   const { speakVerse, stop, isSpeaking } = useTTS();
@@ -155,8 +158,15 @@ export function PlanDetailScreen() {
             const isCompleted = day < plan.currentDay || plan.completed;
             const isFuture = day > plan.currentDay && !plan.completed;
 
+            const verseIds = plan.dailyVerses[day - 1] ?? [];
+
             return (
-              <View
+              <Pressable
+                onPress={() => {
+                  if (verseIds.length > 0) {
+                    navigation.navigate('VerseDetail', { verseId: verseIds[0] });
+                  }
+                }}
                 style={[
                   styles.dayCard,
                   {
@@ -165,7 +175,9 @@ export function PlanDetailScreen() {
                   },
                 ]}
                 accessible={true}
-                accessibilityLabel={`Day ${day}${isCompleted ? ', completed' : isCurrent ? ', current day' : ', upcoming'}`}
+                accessibilityRole="button"
+                accessibilityLabel={`Day ${day}${isCompleted ? ', completed' : isCurrent ? ', current day' : ', upcoming'}. ${verseIds.length} verse${verseIds.length !== 1 ? 's' : ''}`}
+                accessibilityHint="Tap to view verse"
               >
                 <View style={styles.dayHeader}>
                   <Ionicons
@@ -197,11 +209,22 @@ export function PlanDetailScreen() {
                     Day {day}
                   </Text>
                   <Text style={[styles.verseCount, { color: colors.textSecondary }]}>
-                    {plan.dailyVerses[day - 1]?.length ?? 0} verse
-                    {(plan.dailyVerses[day - 1]?.length ?? 0) !== 1 ? 's' : ''}
+                    {verseIds.length} verse
+                    {verseIds.length !== 1 ? 's' : ''}
                   </Text>
                 </View>
-              </View>
+                {/* Show verse IDs for this day */}
+                <View style={styles.verseIdList}>
+                  {verseIds.map((id: string) => (
+                    <Text
+                      key={id}
+                      style={[styles.verseId, { color: colors.link }]}
+                    >
+                      {id.replace(/-/g, ' ').replace(/(\d+)$/, ':$1')}
+                    </Text>
+                  ))}
+                </View>
+              </Pressable>
             );
           }}
           contentContainerStyle={styles.list}
@@ -275,6 +298,16 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   verseCount: {
+    fontSize: 13,
+  },
+  verseIdList: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+    marginTop: 8,
+    paddingLeft: 34,
+  },
+  verseId: {
     fontSize: 13,
   },
 });

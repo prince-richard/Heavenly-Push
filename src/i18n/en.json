@@ -11,6 +11,7 @@
     "dailyVerse": "Today's Verse",
     "recentSearches": "Recent Searches",
     "voiceSearch": "Tap to speak",
+    "searchBible": "Search the Bible",
     "greeting": "Good {{timeOfDay}}!",
     "noDailyVerse": "No verse for today yet"
   },
@@ -57,8 +58,18 @@
     "start": "Start Plan",
     "continue": "Continue"
   },
+  "auth": {
+    "title": "Welcome",
+    "subtitle": "Your voice-first Bible companion",
+    "signInGoogle": "Sign in with Google",
+    "continueAsGuest": "Continue as Guest",
+    "signOut": "Sign Out",
+    "guestUser": "Guest User"
+  },
   "settings": {
     "title": "Settings",
+    "account": "Account",
+    "signOut": "Sign Out",
     "language": "Language",
     "languageEn": "English",
     "languageTa": "Tamil",

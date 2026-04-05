@@ -30,7 +30,8 @@
     },
     "plugins": [
       "expo-localization",
-      "expo-sqlite"
+      "expo-sqlite",
+      "expo-web-browser"
     ]
   }
 }

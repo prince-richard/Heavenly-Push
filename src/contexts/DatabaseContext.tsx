@@ -84,10 +84,15 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
   }, []);
 
   if (state.error) {
+    const isAccessHandleError = state.error.includes('Access Handle') || state.error.includes('createSyncAccessHandle');
     return (
       <View style={styles.center}>
         <Text style={styles.errorTitle}>Database Error</Text>
-        <Text style={styles.errorMessage}>{state.error}</Text>
+        <Text style={styles.errorMessage}>
+          {isAccessHandleError
+            ? 'Another tab is using the database. Please close all other tabs with this app and reload this page.'
+            : state.error}
+        </Text>
       </View>
     );
   }

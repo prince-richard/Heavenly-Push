@@ -3,6 +3,7 @@ import type { AudioPlan, BibleVerse } from '@/types/models';
 import { useDatabase } from '@/contexts/DatabaseContext';
 import { PlanRepository } from '@/db/repositories/PlanRepository';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
+import defaultPlans from '@/data/plans/default-plans.json';
 
 interface PlanProgressResult {
   plan: AudioPlan | null;
@@ -24,7 +25,16 @@ export function usePlanProgress(planId: string): PlanProgressResult {
       const planRepo = new PlanRepository(db);
       const verseRepo = new VerseRepository(db);
 
-      const loaded = await planRepo.getById(planId);
+      let loaded = await planRepo.getById(planId);
+      // Fallback to JSON if not in DB yet
+      if (!loaded) {
+        const jsonPlan = (defaultPlans as AudioPlan[]).find(p => p.planId === planId);
+        if (jsonPlan) {
+          // Save to DB for persistence
+          await planRepo.save(jsonPlan);
+          loaded = jsonPlan;
+        }
+      }
       setPlan(loaded);
 
       if (loaded && loaded.currentDay <= loaded.totalDays) {

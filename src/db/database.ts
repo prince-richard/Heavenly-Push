@@ -2,7 +2,8 @@ import { openDatabaseAsync, type SQLiteDatabase } from 'expo-sqlite';
 import { runMigrations } from './migrations';
 import { seedVerses } from './seed';
 
-const DB_NAME = 'heavenly-push.db';
+// v2: renamed to avoid corrupted DB from earlier FTS5 crash on web
+const DB_NAME = 'heavenly-push-v2.db';
 
 let dbInstance: SQLiteDatabase | null = null;
 
@@ -16,8 +17,13 @@ export async function initializeDatabase(): Promise<SQLiteDatabase> {
   }
 
   dbInstance = await openDatabaseAsync(DB_NAME);
-  // Enable WAL mode for better concurrent read performance
-  await dbInstance.execAsync('PRAGMA journal_mode = WAL');
+
+  // Enable WAL mode — may not be supported on web (wa-sqlite)
+  try {
+    await dbInstance.execAsync('PRAGMA journal_mode = WAL');
+  } catch {
+    console.log('[DB] WAL mode not available, using default journal mode');
+  }
 
   await runMigrations(dbInstance);
   await seedVerses(dbInstance);

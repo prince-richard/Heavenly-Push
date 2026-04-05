@@ -11,6 +11,7 @@
     "dailyVerse": "இன்றைய வசனம்",
     "recentSearches": "சமீபத்திய தேடல்கள்",
     "voiceSearch": "பேச தட்டவும்",
+    "searchBible": "வேதாகமத்தில் தேடுங்கள்",
     "greeting": "{{timeOfDay}} வணக்கம்!",
     "noDailyVerse": "இன்றைக்கு வசனம் இல்லை"
   },
@@ -57,8 +58,18 @@
     "start": "திட்டத்தை தொடங்கு",
     "continue": "தொடர்"
   },
+  "auth": {
+    "title": "வரவேற்பு",
+    "subtitle": "உங்கள் குரல்-முதல் வேதாகம துணை",
+    "signInGoogle": "Google மூலம் உள்நுழையவும்",
+    "continueAsGuest": "விருந்தினராக தொடரவும்",
+    "signOut": "வெளியேறு",
+    "guestUser": "விருந்தினர் பயனர்"
+  },
   "settings": {
     "title": "அமைப்புகள்",
+    "account": "கணக்கு",
+    "signOut": "வெளியேறு",
     "language": "மொழி",
     "languageEn": "ஆங்கிலம்",
     "languageTa": "தமிழ்",

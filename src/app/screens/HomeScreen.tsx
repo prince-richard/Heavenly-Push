@@ -10,15 +10,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { useDailyVerse } from '@/hooks/useDailyVerse';
 import { useShakeDetector } from '@/hooks/useShakeDetector';
-import { useVoiceController } from '@/hooks/useVoiceController';
 import { useTTS } from '@/hooks/useTTS';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useSearchStore } from '@/stores/useSearchStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { VoiceSearchButton } from '@/components/search/VoiceSearchButton';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
@@ -39,41 +38,37 @@ export function HomeScreen() {
   const { colors } = useAccessibility();
   const navigation = useNavigation<HomeNav>();
   const { verse, loading } = useDailyVerse();
-  const { startListening, stopListening, isListening } = useVoiceController();
   const { stop } = useTTS();
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
   const speakingStatus = usePlaybackStore((s) => s.speakingStatus);
   const recentHistory = useSearchStore((s) => s.recentHistory);
 
-  // Enable shake to speak
+  // Shake navigates to Search tab with voice activated
   useShakeDetector(() => {
-    if (!isListening) {
-      startListening();
-    }
+    (navigation as any).navigate('Main', {
+      screen: 'Search',
+      params: { voiceActivated: true },
+    });
   });
 
-  const handleVoicePress = useCallback(() => {
-    if (isListening) {
-      stopListening();
-    } else {
-      startListening();
-    }
-  }, [isListening, startListening, stopListening]);
+  const handleSearchPress = useCallback(() => {
+    (navigation as any).navigate('Main', {
+      screen: 'Search',
+    });
+  }, [navigation]);
+
+  const handleVoiceSearchPress = useCallback(() => {
+    (navigation as any).navigate('Main', {
+      screen: 'Search',
+      params: { voiceActivated: true },
+    });
+  }, [navigation]);
 
   const handleDailyVersePress = useCallback(() => {
     if (verse) {
       navigation.navigate('VerseDetail', { verseId: verse.id });
     }
   }, [verse, navigation]);
-
-  const handleRecentSearchPress = useCallback(
-    (query: string) => {
-      // Navigate to search tab with query
-      (navigation as never as { navigate: (screen: string, params?: Record<string, unknown>) => void })
-        .navigate('Main');
-    },
-    [navigation]
-  );
 
   const handleMiniBarStop = useCallback(() => {
     stop();
@@ -106,13 +101,35 @@ export function HomeScreen() {
           {t('home.greeting', { timeOfDay: getTimeOfDay() })}
         </Text>
 
-        {/* Voice Search Button */}
-        <View style={styles.voiceSearchContainer}>
-          <VoiceSearchButton onPress={handleVoicePress} size={80} />
-          <Text style={[styles.voiceHint, { color: colors.textSecondary }]}>
-            {t('home.voiceSearch')}
+        {/* Search Card — single entry point for all search */}
+        <Pressable
+          onPress={handleSearchPress}
+          accessibilityRole="button"
+          accessibilityLabel={t('home.searchBible')}
+          accessibilityHint="Go to search page"
+          style={({ pressed }) => [
+            styles.searchCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Ionicons name="search" size={24} color={colors.textSecondary} />
+          <Text style={[styles.searchCardText, { color: colors.textSecondary }]}>
+            {t('search.placeholder')}
           </Text>
-        </View>
+          <Pressable
+            onPress={handleVoiceSearchPress}
+            accessibilityRole="button"
+            accessibilityLabel={t('search.voiceButton')}
+            hitSlop={8}
+            style={styles.micButton}
+          >
+            <Ionicons name="mic" size={28} color={colors.accent} />
+          </Pressable>
+        </Pressable>
 
         {/* Daily Verse */}
         <SectionHeader title={t('home.dailyVerse')} />
@@ -159,7 +176,12 @@ export function HomeScreen() {
               scrollEnabled={false}
               renderItem={({ item }) => (
                 <Pressable
-                  onPress={() => handleRecentSearchPress(item.query)}
+                  onPress={() => {
+                    (navigation as any).navigate('Main', {
+                      screen: 'Search',
+                      params: { query: item.query },
+                    });
+                  }}
                   accessibilityRole="button"
                   accessibilityLabel={`Recent search: ${item.query}`}
                   style={({ pressed }) => [
@@ -222,13 +244,25 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 24,
   },
-  voiceSearchContainer: {
+  searchCard: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 28,
-    gap: 12,
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 24,
+    minHeight: MIN_TOUCH_SIZE,
+    gap: 10,
   },
-  voiceHint: {
+  searchCardText: {
     fontSize: 16,
+    flex: 1,
+  },
+  micButton: {
+    minWidth: MIN_TOUCH_SIZE,
+    minHeight: MIN_TOUCH_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dailyVerseCard: {
     padding: 16,

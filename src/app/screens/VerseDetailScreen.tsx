@@ -53,6 +53,11 @@ export function VerseDetailScreen() {
   const [showMemorization, setShowMemorization] = useState(false);
   const [showReflection, setShowReflection] = useState(false);
 
+  // Language fallback notice
+  const showFallback =
+    !loading && currentVerse != null &&
+    primaryLanguage === 'ta' && !currentVerse.textTa && !!currentVerse.textEn;
+
   // Auto-play on open if enabled
   useEffect(() => {
     if (currentVerse && (autoPlay || autoPlayOnOpen)) {
@@ -62,6 +67,15 @@ export function VerseDetailScreen() {
       return () => clearTimeout(timer);
     }
   }, [currentVerse?.id, autoPlay, autoPlayOnOpen]);
+
+  // Announce language fallback for accessibility
+  useEffect(() => {
+    if (showFallback) {
+      AccessibilityInfo.announceForAccessibility(
+        t('verse.languageFallback', { language: 'Tamil' })
+      );
+    }
+  }, [showFallback, t]);
 
   const getVerseText = useCallback(
     (verse: BibleVerse, lang: 'en' | 'ta'): string => {
@@ -154,18 +168,6 @@ export function VerseDetailScreen() {
     primaryLanguage === 'en'
       ? currentVerse.textTa != null
       : currentVerse.textEn != null;
-
-  // Language fallback notice
-  const showFallback =
-    primaryLanguage === 'ta' && !currentVerse.textTa && currentVerse.textEn;
-
-  useEffect(() => {
-    if (showFallback) {
-      AccessibilityInfo.announceForAccessibility(
-        t('verse.languageFallback', { language: 'Tamil' })
-      );
-    }
-  }, [showFallback, t]);
 
   return (
     <SafeAreaView

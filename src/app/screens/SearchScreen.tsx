@@ -64,6 +64,16 @@ export function SearchScreen() {
     }
   }, [route.params?.query]);
 
+  // Auto-activate voice when navigated with voiceActivated=true
+  useEffect(() => {
+    if (route.params?.voiceActivated && !isListening) {
+      const timer = setTimeout(() => {
+        startListening();
+      }, 300);
+      return () => clearTimeout(timer);
+    }
+  }, [route.params?.voiceActivated]);
+
   // Auto-populate from voice transcript
   useEffect(() => {
     if (transcript && transcript !== lastTranscriptRef.current) {

@@ -6,7 +6,7 @@ export type RootStackParamList = {
 
 export type TabParamList = {
   Home: undefined;
-  Search: { query?: string };
+  Search: { query?: string; voiceActivated?: boolean };
   Favorites: undefined;
   Plans: undefined;
   Settings: undefined;

@@ -1,9 +1,11 @@
 import React, { useCallback, useState } from 'react';
-import { View, Text, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
+import { View, Text, Image, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { HighContrastToggle } from '@/components/settings/HighContrastToggle';
 import { TtsSpeedControl } from '@/components/audio/TtsSpeedControl';
 import { PermissionPromptCard } from '@/components/common/PermissionPromptCard';
@@ -17,6 +19,10 @@ import type { SupportedLanguage } from '@/types/models';
 export function SettingsScreen() {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
+
+  const authMethod = useAuthStore((s) => s.authMethod);
+  const authUser = useAuthStore((s) => s.user);
+  const signOut = useAuthStore((s) => s.signOut);
 
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
   const setLanguage = useSettingsStore((s) => s.setLanguage);
@@ -75,6 +81,38 @@ export function SettingsScreen() {
         >
           {t('settings.title')}
         </Text>
+
+        {/* Account */}
+        <SectionHeader title={t('settings.account')} />
+        <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <View style={styles.accountInfo}>
+            {authUser?.photoUrl ? (
+              <Image
+                source={{ uri: authUser.photoUrl }}
+                style={styles.avatar}
+                accessibilityLabel="Profile photo"
+              />
+            ) : (
+              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent }]}>
+                <Ionicons name="person" size={24} color={colors.background} />
+              </View>
+            )}
+            <View style={styles.accountText}>
+              <Text style={[styles.accountName, { color: colors.text }]}>
+                {authUser?.displayName ?? 'Guest'}
+              </Text>
+              {authUser?.email ? (
+                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+                  {authUser.email}
+                </Text>
+              ) : (
+                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+                  {authMethod === 'guest' ? t('auth.guestUser') : ''}
+                </Text>
+              )}
+            </View>
+          </View>
+        </View>
 
         {/* Language */}
         <SectionHeader title={t('settings.language')} />
@@ -177,6 +215,16 @@ export function SettingsScreen() {
           </>
         )}
 
+        {/* Sign Out */}
+        <View style={styles.signOutContainer}>
+          <PrimaryButton
+            title={t('settings.signOut')}
+            onPress={signOut}
+            style={{ backgroundColor: colors.error }}
+            accessibilityHint="Sign out of your account"
+          />
+        </View>
+
         {/* Bottom spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -268,5 +316,42 @@ const styles = StyleSheet.create({
   timeValue: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  accountCard: {
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginBottom: 16,
+  },
+  accountInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+  },
+  avatar: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  avatarPlaceholder: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  accountText: {
+    flex: 1,
+    gap: 2,
+  },
+  accountName: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  accountEmail: {
+    fontSize: 14,
+  },
+  signOutContainer: {
+    marginTop: 24,
   },
 });
