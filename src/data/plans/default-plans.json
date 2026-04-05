@@ -1,0 +1,93 @@
+[
+  {
+    "planId": "plan-7-days-of-peace",
+    "titleEn": "7 Days of Peace",
+    "titleTa": "7 நாள் அமைதி",
+    "descriptionEn": "Find peace and comfort through God's Word over 7 days.",
+    "descriptionTa": "7 நாட்களில் கடவுளின் வார்த்தையின் மூலம் அமைதியையும் ஆறுதலையும் கண்டறியுங்கள்.",
+    "totalDays": 7,
+    "currentDay": 1,
+    "dailyVerses": [
+      ["JHN-14-27"],
+      ["PHP-4-7"],
+      ["ISA-26-3"],
+      ["PSA-23-4"],
+      ["ROM-15-13"],
+      ["MAT-11-28"],
+      ["PSA-46-10"]
+    ],
+    "completed": false
+  },
+  {
+    "planId": "plan-love-in-scripture",
+    "titleEn": "Love in Scripture",
+    "titleTa": "வேதத்தில் அன்பு",
+    "descriptionEn": "Discover the depth of God's love through 7 powerful verses.",
+    "descriptionTa": "7 சக்திவாய்ந்த வசனங்கள் மூலம் கடவுளின் அன்பின் ஆழத்தை கண்டறியுங்கள்.",
+    "totalDays": 7,
+    "currentDay": 1,
+    "dailyVerses": [
+      ["JHN-3-16"],
+      ["1CO-13-4"],
+      ["1CO-13-7"],
+      ["ROM-8-38"],
+      ["1JN-4-19"],
+      ["ROM-5-8"],
+      ["JHN-15-13"]
+    ],
+    "completed": false
+  },
+  {
+    "planId": "plan-building-faith",
+    "titleEn": "Building Faith",
+    "titleTa": "விசுவாசத்தை கட்டுதல்",
+    "descriptionEn": "Strengthen your faith with these 7 foundational verses.",
+    "descriptionTa": "இந்த 7 அடிப்படை வசனங்களால் உங்கள் விசுவாசத்தை வலுப்படுத்துங்கள்.",
+    "totalDays": 7,
+    "currentDay": 1,
+    "dailyVerses": [
+      ["HEB-11-1"],
+      ["ROM-10-17"],
+      ["MAT-17-20"],
+      ["JAS-1-6"],
+      ["MRK-11-24"],
+      ["2CO-5-7"],
+      ["HEB-11-6"]
+    ],
+    "completed": false
+  },
+  {
+    "planId": "plan-finding-hope",
+    "titleEn": "Finding Hope",
+    "titleTa": "நம்பிக்கையை கண்டுபிடித்தல்",
+    "descriptionEn": "Be encouraged with 5 verses about hope and perseverance.",
+    "descriptionTa": "நம்பிக்கை மற்றும் விடாமுயற்சி பற்றிய 5 வசனங்களால் உற்சாகமடையுங்கள்.",
+    "totalDays": 5,
+    "currentDay": 1,
+    "dailyVerses": [
+      ["JER-29-11"],
+      ["ROM-15-13"],
+      ["PSA-42-11"],
+      ["ISA-40-31"],
+      ["LAM-3-22"]
+    ],
+    "completed": false
+  },
+  {
+    "planId": "plan-psalms-of-praise",
+    "titleEn": "Psalms of Praise",
+    "titleTa": "துதிப் பாடல்கள்",
+    "descriptionEn": "Lift your spirit with 5 praise-filled Psalms.",
+    "descriptionTa": "5 துதி நிறைந்த சங்கீதங்களால் உங்கள் ஆவியை உயர்த்துங்கள்.",
+    "totalDays": 5,
+    "currentDay": 1,
+    "dailyVerses": [
+      ["PSA-150-6"],
+      ["PSA-100-1"],
+      ["PSA-34-1"],
+      ["PSA-95-1"],
+      ["PSA-103-1"]
+    ],
+    "completed": false
+  }
+]
