@@ -1,0 +1,117 @@
+{
+  "tabs": {
+    "home": "Home",
+    "search": "Search",
+    "favorites": "Favorites",
+    "plans": "Plans",
+    "settings": "Settings"
+  },
+  "home": {
+    "title": "Heavenly Push",
+    "dailyVerse": "Today's Verse",
+    "recentSearches": "Recent Searches",
+    "voiceSearch": "Tap to speak",
+    "greeting": "Good {{timeOfDay}}!",
+    "noDailyVerse": "No verse for today yet"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search for a verse, topic, or mood...",
+    "voiceButton": "Voice search",
+    "resultsCount": "{{count}} results found",
+    "noResults": "No results found",
+    "noResultsHint": "Try a different search term or speak your query",
+    "filterAll": "All",
+    "filterEnglish": "English",
+    "filterTamil": "Tamil",
+    "recentSearches": "Recent Searches",
+    "clearHistory": "Clear history"
+  },
+  "verse": {
+    "title": "Verse Detail",
+    "readAloud": "Read aloud",
+    "stopReading": "Stop reading",
+    "addFavorite": "Add to favorites",
+    "removeFavorite": "Remove from favorites",
+    "readContext": "Read context",
+    "share": "Share verse",
+    "reflection": "Record reflection",
+    "memorize": "Memorize",
+    "crossReferences": "Cross References",
+    "chapterSummary": "Chapter Summary",
+    "historicalContext": "Historical Context",
+    "languageFallback": "Translation not available in {{language}}, showing English"
+  },
+  "favorites": {
+    "title": "Favorites",
+    "empty": "No favorites yet",
+    "emptyHint": "Bookmark verses you love and they will appear here",
+    "remove": "Remove from favorites"
+  },
+  "plans": {
+    "title": "Reading Plans",
+    "empty": "No plans available",
+    "emptyHint": "Reading plans will appear here",
+    "progress": "Day {{current}} of {{total}}",
+    "completed": "Completed",
+    "start": "Start Plan",
+    "continue": "Continue"
+  },
+  "settings": {
+    "title": "Settings",
+    "language": "Language",
+    "languageEn": "English",
+    "languageTa": "Tamil",
+    "searchLanguage": "Search Language",
+    "searchLanguageAuto": "Auto-detect",
+    "ttsSpeed": "Reading Speed",
+    "ttsSpeedSlow": "Slow",
+    "ttsSpeedNormal": "Normal",
+    "ttsSpeedFast": "Fast",
+    "highContrast": "High Contrast Mode",
+    "haptics": "Haptic Feedback",
+    "shakeToSpeak": "Shake to Speak",
+    "dailyPush": "Daily Verse Notification",
+    "dailyPushTime": "Notification Time",
+    "autoPlay": "Auto-play verse on open",
+    "dynamicText": "Dynamic Text Scaling",
+    "appearance": "Appearance",
+    "audio": "Audio & Voice",
+    "notifications": "Notifications",
+    "accessibility": "Accessibility"
+  },
+  "common": {
+    "loading": "Loading...",
+    "error": "Something went wrong",
+    "retry": "Try again",
+    "cancel": "Cancel",
+    "save": "Save",
+    "delete": "Delete",
+    "share": "Share",
+    "close": "Close",
+    "back": "Go back",
+    "ok": "OK"
+  },
+  "permissions": {
+    "microphoneTitle": "Microphone Access Needed",
+    "microphoneMessage": "To use voice search, please allow microphone access in your device settings.",
+    "microphoneAction": "Open Settings",
+    "notificationTitle": "Notifications Needed",
+    "notificationMessage": "To receive daily verses, please allow notifications in your device settings.",
+    "notificationAction": "Open Settings"
+  },
+  "accessibility": {
+    "tabHome": "Home tab",
+    "tabSearch": "Search tab",
+    "tabFavorites": "Favorites tab",
+    "tabPlans": "Plans tab",
+    "tabSettings": "Settings tab",
+    "voiceSearchButton": "Voice search. Double tap to start listening.",
+    "playButton": "Play verse audio",
+    "pauseButton": "Pause verse audio",
+    "stopButton": "Stop verse audio",
+    "favoriteButton": "Toggle favorite",
+    "searchInput": "Search input field",
+    "loadingContent": "Content is loading, please wait"
+  }
+}
