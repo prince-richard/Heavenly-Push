@@ -24,37 +24,44 @@ export async function up(db: SQLiteDatabase): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_verses_ref ON verses(book_code, chapter, verse);
   `);
 
-  // FTS5 virtual table
-  await db.execAsync(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
-      text_en, text_ta, keywords_en, keywords_ta, theme_tags,
-      content=verses, content_rowid=rowid
-    );
-  `);
+  // FTS5 virtual table — not available on web (wa-sqlite lacks fts5 module)
+  // Search falls back to LIKE queries when FTS is unavailable
+  try {
+    await db.execAsync(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
+        text_en, text_ta, keywords_en, keywords_ta, theme_tags,
+        content=verses, content_rowid=rowid
+      );
+    `);
 
-  // Sync triggers for FTS
-  await db.execAsync(`
-    CREATE TRIGGER IF NOT EXISTS verses_ai AFTER INSERT ON verses BEGIN
-      INSERT INTO verses_fts(rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
-      VALUES (new.rowid, new.text_en, new.text_ta, new.keywords_en, new.keywords_ta, new.theme_tags);
-    END;
-  `);
+    // Sync triggers for FTS
+    await db.execAsync(`
+      CREATE TRIGGER IF NOT EXISTS verses_ai AFTER INSERT ON verses BEGIN
+        INSERT INTO verses_fts(rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
+        VALUES (new.rowid, new.text_en, new.text_ta, new.keywords_en, new.keywords_ta, new.theme_tags);
+      END;
+    `);
 
-  await db.execAsync(`
-    CREATE TRIGGER IF NOT EXISTS verses_ad AFTER DELETE ON verses BEGIN
-      INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
-      VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
-    END;
-  `);
+    await db.execAsync(`
+      CREATE TRIGGER IF NOT EXISTS verses_ad AFTER DELETE ON verses BEGIN
+        INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
+        VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
+      END;
+    `);
 
-  await db.execAsync(`
-    CREATE TRIGGER IF NOT EXISTS verses_au AFTER UPDATE ON verses BEGIN
-      INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
-      VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
-      INSERT INTO verses_fts(rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
-      VALUES (new.rowid, new.text_en, new.text_ta, new.keywords_en, new.keywords_ta, new.theme_tags);
-    END;
-  `);
+    await db.execAsync(`
+      CREATE TRIGGER IF NOT EXISTS verses_au AFTER UPDATE ON verses BEGIN
+        INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
+        VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
+        INSERT INTO verses_fts(rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
+        VALUES (new.rowid, new.text_en, new.text_ta, new.keywords_en, new.keywords_ta, new.theme_tags);
+      END;
+    `);
+
+    console.log('[DB] FTS5 enabled');
+  } catch (e) {
+    console.log('[DB] FTS5 not available (web), using LIKE fallback for search');
+  }
 
   // Favorites table
   await db.execAsync(`
