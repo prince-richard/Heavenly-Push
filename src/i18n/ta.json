@@ -1,0 +1,117 @@
+{
+  "tabs": {
+    "home": "முகப்பு",
+    "search": "தேடல்",
+    "favorites": "பிடித்தவை",
+    "plans": "திட்டங்கள்",
+    "settings": "அமைப்புகள்"
+  },
+  "home": {
+    "title": "ஹெவன்லி புஷ்",
+    "dailyVerse": "இன்றைய வசனம்",
+    "recentSearches": "சமீபத்திய தேடல்கள்",
+    "voiceSearch": "பேச தட்டவும்",
+    "greeting": "{{timeOfDay}} வணக்கம்!",
+    "noDailyVerse": "இன்றைக்கு வசனம் இல்லை"
+  },
+  "search": {
+    "title": "தேடல்",
+    "placeholder": "வசனம், தலைப்பு அல்லது மனநிலையை தேடுங்கள்...",
+    "voiceButton": "குரல் தேடல்",
+    "resultsCount": "{{count}} முடிவுகள் கிடைத்தன",
+    "noResults": "முடிவுகள் இல்லை",
+    "noResultsHint": "வேறு தேடல் சொல்லை முயற்சிக்கவும்",
+    "filterAll": "அனைத்தும்",
+    "filterEnglish": "ஆங்கிலம்",
+    "filterTamil": "தமிழ்",
+    "recentSearches": "சமீபத்திய தேடல்கள்",
+    "clearHistory": "வரலாற்றை அழி"
+  },
+  "verse": {
+    "title": "வசன விவரம்",
+    "readAloud": "சத்தமாக படிக்கவும்",
+    "stopReading": "படிப்பதை நிறுத்து",
+    "addFavorite": "பிடித்தவைகளில் சேர்",
+    "removeFavorite": "பிடித்தவைகளிலிருந்து நீக்கு",
+    "readContext": "சூழலைப் படிக்கவும்",
+    "share": "வசனத்தைப் பகிர்",
+    "reflection": "பிரதிபலிப்பை பதிவு செய்",
+    "memorize": "மனப்பாடம் செய்",
+    "crossReferences": "குறுக்கு குறிப்புகள்",
+    "chapterSummary": "அதிகார சுருக்கம்",
+    "historicalContext": "வரலாற்று சூழல்",
+    "languageFallback": "{{language}} மொழிபெயர்ப்பு கிடைக்கவில்லை, ஆங்கிலத்தில் காட்டுகிறது"
+  },
+  "favorites": {
+    "title": "பிடித்தவை",
+    "empty": "பிடித்தவை இல்லை",
+    "emptyHint": "நீங்கள் விரும்பும் வசனங்களை புக்மார்க் செய்யுங்கள்",
+    "remove": "பிடித்தவைகளிலிருந்து நீக்கு"
+  },
+  "plans": {
+    "title": "படிப்பு திட்டங்கள்",
+    "empty": "திட்டங்கள் இல்லை",
+    "emptyHint": "படிப்பு திட்டங்கள் இங்கே தோன்றும்",
+    "progress": "நாள் {{current}} / {{total}}",
+    "completed": "நிறைவடைந்தது",
+    "start": "திட்டத்தை தொடங்கு",
+    "continue": "தொடர்"
+  },
+  "settings": {
+    "title": "அமைப்புகள்",
+    "language": "மொழி",
+    "languageEn": "ஆங்கிலம்",
+    "languageTa": "தமிழ்",
+    "searchLanguage": "தேடல் மொழி",
+    "searchLanguageAuto": "தானியங்கி",
+    "ttsSpeed": "படிக்கும் வேகம்",
+    "ttsSpeedSlow": "மெதுவாக",
+    "ttsSpeedNormal": "சாதாரணம்",
+    "ttsSpeedFast": "வேகமாக",
+    "highContrast": "உயர் மாறுபாடு முறை",
+    "haptics": "தொடு பின்னூட்டம்",
+    "shakeToSpeak": "பேச குலுக்கு",
+    "dailyPush": "தினசரி வசன அறிவிப்பு",
+    "dailyPushTime": "அறிவிப்பு நேரம்",
+    "autoPlay": "திறக்கும்போது வசனத்தை தானாக இயக்கு",
+    "dynamicText": "மாறும் உரை அளவு",
+    "appearance": "தோற்றம்",
+    "audio": "ஒலி & குரல்",
+    "notifications": "அறிவிப்புகள்",
+    "accessibility": "அணுகல்தன்மை"
+  },
+  "common": {
+    "loading": "ஏற்றுகிறது...",
+    "error": "ஏதோ தவறு ஏற்பட்டது",
+    "retry": "மீண்டும் முயற்சி",
+    "cancel": "ரத்து",
+    "save": "சேமி",
+    "delete": "நீக்கு",
+    "share": "பகிர்",
+    "close": "மூடு",
+    "back": "பின் செல்",
+    "ok": "சரி"
+  },
+  "permissions": {
+    "microphoneTitle": "மைக்ரோஃபோன் அணுகல் தேவை",
+    "microphoneMessage": "குரல் தேடலைப் பயன்படுத்த, உங்கள் சாதன அமைப்புகளில் மைக்ரோஃபோன் அணுகலை அனுமதிக்கவும்.",
+    "microphoneAction": "அமைப்புகளைத் திற",
+    "notificationTitle": "அறிவிப்புகள் தேவை",
+    "notificationMessage": "தினசரி வசனங்களைப் பெற, உங்கள் சாதன அமைப்புகளில் அறிவிப்புகளை அனுமதிக்கவும்.",
+    "notificationAction": "அமைப்புகளைத் திற"
+  },
+  "accessibility": {
+    "tabHome": "முகப்பு தாவல்",
+    "tabSearch": "தேடல் தாவல்",
+    "tabFavorites": "பிடித்தவை தாவல்",
+    "tabPlans": "திட்டங்கள் தாவல்",
+    "tabSettings": "அமைப்புகள் தாவல்",
+    "voiceSearchButton": "குரல் தேடல். கேட்க இருமுறை தட்டவும்.",
+    "playButton": "வசன ஒலியை இயக்கு",
+    "pauseButton": "வசன ஒலியை இடைநிறுத்து",
+    "stopButton": "வசன ஒலியை நிறுத்து",
+    "favoriteButton": "பிடித்தவையை மாற்று",
+    "searchInput": "தேடல் உள்ளீட்டு புலம்",
+    "loadingContent": "உள்ளடக்கம் ஏற்றுகிறது, காத்திருக்கவும்"
+  }
+}
