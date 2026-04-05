@@ -9,8 +9,8 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import { generateId } from '@/utils/id';
 import type { VoiceReflection } from '@/types/models';
-import { AudioRecordingService } from '@/services/audio/AudioRecordingService';
-import { FileStorageService } from '@/services/storage/FileStorageService';
+import { audioRecordingService } from '@/services/audio/AudioRecordingService';
+import { fileStorageService } from '@/services/storage/FileStorageService';
 import { getDatabase } from '@/db/database';
 import { ReflectionRepository } from '@/db/repositories/ReflectionRepository';
 
@@ -43,7 +43,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
   const handleStartRecording = useCallback(async () => {
     try {
-      await AudioRecordingService.startRecording();
+      await audioRecordingService.startRecording();
       setState('RECORDING');
       setRecordingDuration(0);
     } catch {
@@ -53,10 +53,10 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
   const handleStopRecording = useCallback(async () => {
     try {
-      const result = await AudioRecordingService.stopRecording();
+      const result = await audioRecordingService.stopRecording();
       if (result) {
         setCurrentUri(result.uri);
-        setRecordingDuration(result.durationSeconds);
+        setRecordingDuration(result.duration);
         setState('PREVIEW');
       } else {
         setState('IDLE');
@@ -69,7 +69,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
   const handlePreviewPlay = useCallback(async () => {
     if (currentUri) {
       try {
-        await AudioRecordingService.playRecording(currentUri);
+        await audioRecordingService.playRecording(currentUri);
       } catch {
         // Playback error
       }
@@ -81,7 +81,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
     try {
       const noteId = generateId();
-      const savedUri = await FileStorageService.saveReflection(
+      const savedUri = await fileStorageService.saveReflection(
         verseId,
         noteId,
         currentUri
@@ -119,7 +119,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
     async (reflection: VoiceReflection) => {
       try {
         setPlayingId(reflection.noteId);
-        await AudioRecordingService.playRecording(reflection.audioFileUri);
+        await audioRecordingService.playRecording(reflection.audioFileUri);
         setPlayingId(null);
       } catch {
         setPlayingId(null);
@@ -137,7 +137,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
         const reflection = reflections.find((r) => r.noteId === noteId);
         if (reflection) {
-          await FileStorageService.deleteReflection(reflection.audioFileUri);
+          await fileStorageService.deleteReflection(verseId, noteId);
         }
 
         setReflections((prev) => prev.filter((r) => r.noteId !== noteId));

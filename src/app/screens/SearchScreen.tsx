@@ -26,7 +26,6 @@ import type { BibleVerse, SearchResult, SupportedLanguage } from '@/types/models
 import { getDatabase } from '@/db/database';
 import { SearchEngine } from '@/services/search/SearchEngine';
 import { SearchHistoryRepository } from '@/db/repositories/SearchHistoryRepository';
-import { generateId } from '@/utils/id';
 
 type SearchNav = NativeStackNavigationProp<RootStackParamList>;
 type SearchRoute = RouteProp<TabParamList, 'Search'>;
@@ -108,12 +107,7 @@ export function SearchScreen() {
 
         // Save to search history
         const historyRepo = new SearchHistoryRepository(db);
-        historyRepo.save({
-          id: generateId(),
-          query: trimmed,
-          language: langOption,
-          createdAt: new Date().toISOString(),
-        });
+        historyRepo.add(trimmed, langOption);
 
         // Refresh recent history in store
         const recent = historyRepo.getRecent(10);

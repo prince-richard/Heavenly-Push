@@ -4,7 +4,6 @@ import { getDatabase } from '@/db/database';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
 import { DailyVerseRepository } from '@/db/repositories/DailyVerseRepository';
 import { DAILY_VERSE_EXCLUSION_WINDOW } from '@/constants/config';
-import { generateId } from '@/utils/id';
 
 interface DailyVerseResult {
   verse: BibleVerse | null;
@@ -64,11 +63,7 @@ export function useDailyVerse(): DailyVerseResult {
         const selected = pool[Math.floor(Math.random() * pool.length)];
 
         // Save today's daily verse
-        dailyRepo.save({
-          id: generateId(),
-          verseId: selected.id,
-          date: today,
-        });
+        dailyRepo.save(selected.id, today);
 
         if (!cancelled) {
           setVerse(selected);

@@ -10,7 +10,7 @@ import { VerseRepository } from '../../db/repositories/VerseRepository';
 import { normalize } from './QueryNormalizer';
 import { parse } from './ReferenceParser';
 import { mapMoodToThemes } from './MoodMapper';
-import { textSimilarity } from '../../utils/textSimilarity';
+import { normalizedLevenshteinSimilarity } from '../../utils/textSimilarity';
 
 export class SearchEngine {
   private verseRepo: VerseRepository;
@@ -132,13 +132,13 @@ export class SearchEngine {
         language === 'ta' ? verse.keywordsTa : verse.keywordsEn;
 
       for (const keyword of keywords) {
-        const sim = textSimilarity(query, keyword.toLowerCase());
+        const sim = normalizedLevenshteinSimilarity(query, keyword.toLowerCase());
         if (sim > bestScore) bestScore = sim;
       }
 
       // Also check theme tags
       for (const tag of verse.themeTags) {
-        const sim = textSimilarity(query, tag);
+        const sim = normalizedLevenshteinSimilarity(query, tag);
         if (sim > bestScore) bestScore = sim;
       }
 

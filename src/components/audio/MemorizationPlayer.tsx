@@ -126,7 +126,7 @@ export function MemorizationPlayer({
               </Text>
             )}
 
-            {state === 'repeating' && (
+            {state === 'waitingForUser' && (
               <View style={styles.repeatControls}>
                 <PrimaryButton
                   title="My Turn (Speak)"

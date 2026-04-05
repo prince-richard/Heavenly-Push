@@ -66,7 +66,7 @@ export function usePlanProgress(planId: string): PlanProgressResult {
       const nextDay = plan.currentDay + 1;
       const isCompleted = nextDay > plan.totalDays;
 
-      planRepo.updateProgress(plan.planId, nextDay, isCompleted);
+      planRepo.updateProgress(plan.planId, nextDay);
 
       setPlan((prev) =>
         prev
