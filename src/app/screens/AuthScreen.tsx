@@ -1,4 +1,4 @@
-import React, { useCallback, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,22 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 
+function signInFromGoogleIdToken(
+  idToken: string,
+  signInWithGoogle: (user: {
+    displayName: string;
+    email: string | null;
+    photoUrl: string | null;
+  }) => void
+) {
+  const payload = JSON.parse(atob(idToken.split('.')[1]));
+  signInWithGoogle({
+    displayName: payload.name ?? payload.email ?? 'User',
+    email: payload.email ?? null,
+    photoUrl: payload.picture ?? null,
+  });
+}
+
 export function AuthScreen() {
   const { colors } = useAccessibility();
   const signInWithGoogle = useAuthStore((s) => s.signInWithGoogle);
@@ -20,19 +36,61 @@ export function AuthScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Web: full-window redirect returns here with #id_token=... (popup flow would need
+  // WebBrowser.maybeCompleteAuthSession() on /oauth, which we do not use).
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const raw = window.location.hash;
+    if (!raw || raw.length < 2) return;
+
+    const params = new URLSearchParams(raw.startsWith('#') ? raw.slice(1) : raw);
+    const stripHashFromUrl = () => {
+      const { pathname, search } = window.location;
+      const next = pathname === '/oauth' ? '/' : `${pathname}${search}`;
+      window.history.replaceState(null, '', next);
+    };
+
+    const oauthError = params.get('error');
+    if (oauthError) {
+      stripHashFromUrl();
+      setError(
+        oauthError === 'access_denied'
+          ? 'Sign in was cancelled. Try again or continue as guest.'
+          : 'Google sign in failed. You can continue as guest.'
+      );
+      return;
+    }
+
+    const idToken = params.get('id_token');
+    if (!idToken) return;
+
+    stripHashFromUrl();
+
+    try {
+      signInFromGoogleIdToken(idToken, signInWithGoogle);
+    } catch (e) {
+      console.error('Google OAuth return handling error:', e);
+      setError('Google sign in failed. You can continue as guest.');
+    }
+  }, [signInWithGoogle]);
+
   const handleGoogleSignIn = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // Dynamic import to avoid requiring expo-auth-session when not needed
       const { makeRedirectUri } = await import('expo-auth-session');
-      const { openAuthSessionAsync } = await import('expo-web-browser');
 
-      const redirectUri = makeRedirectUri({ preferLocalhost: Platform.OS === 'web' });
+      // Must match Google Cloud Console → OAuth 2.0 Web client → Authorized redirect URIs (exact string).
+      // Dev (Expo web is usually port 8081): http://localhost:8081/oauth and http://127.0.0.1:8081/oauth
+      // Production: https://your-domain.com/oauth
+      const redirectUri = makeRedirectUri({
+        path: 'oauth',
+        preferLocalhost: Platform.OS === 'web',
+      });
 
-      // Google OAuth endpoint
       const clientId = Platform.select({
-        web: 'YOUR_WEB_CLIENT_ID.apps.googleusercontent.com',
+        web: '19249620763-4brri96gmareiiu0q80888kovb945cde.apps.googleusercontent.com',
         ios: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
         android: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
         default: '',
@@ -46,26 +104,24 @@ export function AuthScreen() {
         `scope=${encodeURIComponent('openid profile email')}&` +
         `nonce=${Date.now()}`;
 
+      if (Platform.OS === 'web') {
+        window.location.assign(authUrl);
+        return;
+      }
+
+      const { openAuthSessionAsync } = await import('expo-web-browser');
       const result = await openAuthSessionAsync(authUrl, redirectUri);
 
       if (result.type === 'success' && result.url) {
-        // Extract ID token from URL fragment
-        const params = new URLSearchParams(result.url.split('#')[1]);
+        const params = new URLSearchParams(result.url.split('#')[1] ?? '');
         const idToken = params.get('id_token');
 
         if (idToken) {
-          // Decode JWT payload (no verification needed for local-only)
-          const payload = JSON.parse(atob(idToken.split('.')[1]));
-          signInWithGoogle({
-            displayName: payload.name ?? payload.email ?? 'User',
-            email: payload.email ?? null,
-            photoUrl: payload.picture ?? null,
-          });
+          signInFromGoogleIdToken(idToken, signInWithGoogle);
           return;
         }
       }
 
-      // If we get here, auth wasn't completed
       setError('Sign in was cancelled. Try again or continue as guest.');
     } catch (err) {
       console.error('Google sign in error:', err);
