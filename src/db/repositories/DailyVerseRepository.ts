@@ -19,23 +19,23 @@ function rowToDailyVerse(row: DailyVerseRow): DailyVerse {
 export class DailyVerseRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  getByDate(date: string): DailyVerse | null {
-    const row = this.db.getFirstSync<DailyVerseRow>(
+  async getByDate(date: string): Promise<DailyVerse | null> {
+    const row = await this.db.getFirstAsync<DailyVerseRow>(
       'SELECT * FROM daily_verses WHERE date = ?',
       [date],
     );
     return row ? rowToDailyVerse(row) : null;
   }
 
-  save(verseId: string, date: string): void {
-    this.db.runSync(
+  async save(verseId: string, date: string): Promise<void> {
+    await this.db.runAsync(
       'INSERT OR REPLACE INTO daily_verses (id, verse_id, date) VALUES (?, ?, ?)',
       [generateId(), verseId, date],
     );
   }
 
-  getRecent(count: number): DailyVerse[] {
-    const rows = this.db.getAllSync<DailyVerseRow>(
+  async getRecent(count: number): Promise<DailyVerse[]> {
+    const rows = await this.db.getAllAsync<DailyVerseRow>(
       'SELECT * FROM daily_verses ORDER BY date DESC LIMIT ?',
       [count],
     );

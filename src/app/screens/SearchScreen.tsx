@@ -22,8 +22,8 @@ import { ResultList } from '@/components/search/ResultList';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import type { RootStackParamList, TabParamList } from '@/types/navigation';
-import type { BibleVerse, SearchResult, SupportedLanguage } from '@/types/models';
-import { getDatabase } from '@/db/database';
+import type { BibleVerse, SupportedLanguage } from '@/types/models';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { SearchEngine } from '@/services/search/SearchEngine';
 import { SearchHistoryRepository } from '@/db/repositories/SearchHistoryRepository';
 
@@ -37,6 +37,7 @@ export function SearchScreen() {
   const { colors } = useAccessibility();
   const navigation = useNavigation<SearchNav>();
   const route = useRoute<SearchRoute>();
+  const db = useDatabase();
   const { startListening, stopListening, isListening } = useVoiceController();
   const { speakText } = useTTS();
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
@@ -59,7 +60,7 @@ export function SearchScreen() {
   useEffect(() => {
     if (route.params?.query) {
       setQuery(route.params.query);
-      performSearch(route.params.query);
+      void performSearch(route.params.query);
     }
   }, [route.params?.query]);
 
@@ -68,7 +69,7 @@ export function SearchScreen() {
     if (transcript && transcript !== lastTranscriptRef.current) {
       lastTranscriptRef.current = transcript;
       setQuery(transcript);
-      performSearch(transcript);
+      void performSearch(transcript);
     }
   }, [transcript]);
 
@@ -82,7 +83,6 @@ export function SearchScreen() {
 
       setLoading(true);
       try {
-        const db = getDatabase();
         const engine = new SearchEngine(db);
         const langOption: SupportedLanguage | 'auto' =
           languageFilter === 'all' ? 'auto' : languageFilter;
@@ -102,30 +102,31 @@ export function SearchScreen() {
         } else {
           AccessibilityInfo.announceForAccessibility(t('search.noResults'));
           // Speak "no results" for voice-first users
-          speakText(t('search.noResults'), primaryLanguage);
+          void speakText(t('search.noResults'), primaryLanguage);
         }
 
         // Save to search history
         const historyRepo = new SearchHistoryRepository(db);
-        historyRepo.add(trimmed, langOption);
+        await historyRepo.add(trimmed, langOption);
 
         // Refresh recent history in store
-        const recent = historyRepo.getRecent(10);
+        const recent = await historyRepo.getRecent(10);
         setRecentHistory(recent);
-      } catch {
+      } catch (error) {
+        console.error('Search error:', error);
         setResults([]);
       } finally {
         setLoading(false);
       }
     },
-    [languageFilter, selectedThemes, primaryLanguage, t, setResults, setLoading, setRecentHistory, speakText]
+    [db, languageFilter, selectedThemes, primaryLanguage, t, setResults, setLoading, setRecentHistory, speakText]
   );
 
   const handleChangeText = useCallback(
     (text: string) => {
       setQuery(text);
       if (text.trim()) {
-        performSearch(text);
+        void performSearch(text);
       } else {
         setResults([]);
       }
@@ -161,7 +162,7 @@ export function SearchScreen() {
   // Re-search when filters change
   useEffect(() => {
     if (query.trim()) {
-      performSearch(query);
+      void performSearch(query);
     }
   }, [languageFilter, selectedThemes]);
 
@@ -183,7 +184,7 @@ export function SearchScreen() {
         <SearchBar
           value={query}
           onChangeText={handleChangeText}
-          onSubmit={(text) => performSearch(text)}
+          onSubmit={(text) => void performSearch(text)}
           onVoicePress={handleVoicePress}
         />
 

@@ -21,28 +21,29 @@ function rowToFavorite(row: FavoriteRow): FavoriteVerse {
 export class FavoritesRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  add(verseId: string): void {
-    if (this.isFavorite(verseId)) return;
+  async add(verseId: string): Promise<void> {
+    const already = await this.isFavorite(verseId);
+    if (already) return;
 
-    this.db.runSync(
+    await this.db.runAsync(
       'INSERT INTO favorites (id, verse_id, created_at) VALUES (?, ?, ?)',
       [generateId(), verseId, new Date().toISOString()],
     );
   }
 
-  remove(verseId: string): void {
-    this.db.runSync('DELETE FROM favorites WHERE verse_id = ?', [verseId]);
+  async remove(verseId: string): Promise<void> {
+    await this.db.runAsync('DELETE FROM favorites WHERE verse_id = ?', [verseId]);
   }
 
-  getAll(): FavoriteVerse[] {
-    const rows = this.db.getAllSync<FavoriteRow>(
+  async getAll(): Promise<FavoriteVerse[]> {
+    const rows = await this.db.getAllAsync<FavoriteRow>(
       'SELECT * FROM favorites ORDER BY created_at DESC',
     );
     return rows.map(rowToFavorite);
   }
 
-  isFavorite(verseId: string): boolean {
-    const row = this.db.getFirstSync<{ cnt: number }>(
+  async isFavorite(verseId: string): Promise<boolean> {
+    const row = await this.db.getFirstAsync<{ cnt: number }>(
       'SELECT COUNT(*) as cnt FROM favorites WHERE verse_id = ?',
       [verseId],
     );

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import type { AudioPlan, BibleVerse } from '@/types/models';
-import { getDatabase } from '@/db/database';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { PlanRepository } from '@/db/repositories/PlanRepository';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
 
@@ -13,6 +13,7 @@ interface PlanProgressResult {
 }
 
 export function usePlanProgress(planId: string): PlanProgressResult {
+  const db = useDatabase();
   const [plan, setPlan] = useState<AudioPlan | null>(null);
   const [currentDayVerses, setCurrentDayVerses] = useState<BibleVerse[]>([]);
   const [loading, setLoading] = useState(true);
@@ -20,34 +21,36 @@ export function usePlanProgress(planId: string): PlanProgressResult {
   const loadPlan = useCallback(async () => {
     setLoading(true);
     try {
-      const db = getDatabase();
       const planRepo = new PlanRepository(db);
       const verseRepo = new VerseRepository(db);
 
-      const loaded = planRepo.getById(planId);
+      const loaded = await planRepo.getById(planId);
       setPlan(loaded);
 
       if (loaded && loaded.currentDay <= loaded.totalDays) {
         // dailyVerses is 0-indexed, currentDay is 1-indexed
         const dayIndex = loaded.currentDay - 1;
         const verseIds: string[] = loaded.dailyVerses[dayIndex] ?? [];
-        const verses = verseIds
-          .map((id: string) => verseRepo.getById(id))
-          .filter((v: BibleVerse | null): v is BibleVerse => v !== null);
+        const verses: BibleVerse[] = [];
+        for (const id of verseIds) {
+          const v = await verseRepo.getById(id);
+          if (v) verses.push(v);
+        }
         setCurrentDayVerses(verses);
       } else {
         setCurrentDayVerses([]);
       }
-    } catch {
+    } catch (error) {
+      console.error('usePlanProgress error:', error);
       setPlan(null);
       setCurrentDayVerses([]);
     } finally {
       setLoading(false);
     }
-  }, [planId]);
+  }, [db, planId]);
 
   useEffect(() => {
-    loadPlan();
+    void loadPlan();
   }, [loadPlan]);
 
   const progress = plan
@@ -59,31 +62,34 @@ export function usePlanProgress(planId: string): PlanProgressResult {
   const markDayComplete = useCallback(() => {
     if (!plan) return;
 
-    try {
-      const db = getDatabase();
-      const planRepo = new PlanRepository(db);
+    async function doMark() {
+      try {
+        const planRepo = new PlanRepository(db);
 
-      const nextDay = plan.currentDay + 1;
-      const isCompleted = nextDay > plan.totalDays;
+        const nextDay = plan!.currentDay + 1;
+        const isCompleted = nextDay > plan!.totalDays;
 
-      planRepo.updateProgress(plan.planId, nextDay);
+        await planRepo.updateProgress(plan!.planId, nextDay);
 
-      setPlan((prev) =>
-        prev
-          ? {
-              ...prev,
-              currentDay: nextDay,
-              completed: isCompleted,
-            }
-          : null
-      );
+        setPlan((prev) =>
+          prev
+            ? {
+                ...prev,
+                currentDay: nextDay,
+                completed: isCompleted,
+              }
+            : null
+        );
 
-      // Reload verses for the new day
-      loadPlan();
-    } catch {
-      // Silently fail — the UI still shows the current state
+        // Reload verses for the new day
+        await loadPlan();
+      } catch (error) {
+        console.error('markDayComplete error:', error);
+      }
     }
-  }, [plan, loadPlan]);
+
+    void doMark();
+  }, [db, plan, loadPlan]);
 
   return {
     plan,

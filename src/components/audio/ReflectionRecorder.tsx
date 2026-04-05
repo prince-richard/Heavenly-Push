@@ -11,7 +11,7 @@ import { generateId } from '@/utils/id';
 import type { VoiceReflection } from '@/types/models';
 import { audioRecordingService } from '@/services/audio/AudioRecordingService';
 import { fileStorageService } from '@/services/storage/FileStorageService';
-import { getDatabase } from '@/db/database';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { ReflectionRepository } from '@/db/repositories/ReflectionRepository';
 
 type RecorderState = 'IDLE' | 'RECORDING' | 'PREVIEW' | 'SAVED';
@@ -23,6 +23,7 @@ interface ReflectionRecorderProps {
 export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
+  const db = useDatabase();
   const [state, setState] = useState<RecorderState>('IDLE');
   const [reflections, setReflections] = useState<VoiceReflection[]>([]);
   const [currentUri, setCurrentUri] = useState<string | null>(null);
@@ -31,15 +32,18 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
   // Load existing reflections
   useEffect(() => {
-    try {
-      const db = getDatabase();
-      const repo = new ReflectionRepository(db);
-      const existing = repo.getByVerseId(verseId);
-      setReflections(existing);
-    } catch {
-      setReflections([]);
+    async function load() {
+      try {
+        const repo = new ReflectionRepository(db);
+        const existing = await repo.getByVerseId(verseId);
+        setReflections(existing);
+      } catch (error) {
+        console.error('ReflectionRecorder load error:', error);
+        setReflections([]);
+      }
     }
-  }, [verseId]);
+    void load();
+  }, [db, verseId]);
 
   const handleStartRecording = useCallback(async () => {
     try {
@@ -95,9 +99,8 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
         createdAt: new Date().toISOString(),
       };
 
-      const db = getDatabase();
       const repo = new ReflectionRepository(db);
-      repo.save(reflection);
+      await repo.save(reflection);
 
       setReflections((prev) => [reflection, ...prev]);
       setCurrentUri(null);
@@ -105,10 +108,10 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
 
       // Reset to IDLE after brief delay
       setTimeout(() => setState('IDLE'), 1500);
-    } catch {
-      // Save error
+    } catch (error) {
+      console.error('ReflectionRecorder save error:', error);
     }
-  }, [currentUri, verseId, recordingDuration]);
+  }, [db, currentUri, verseId, recordingDuration]);
 
   const handleDiscard = useCallback(() => {
     setCurrentUri(null);
@@ -131,9 +134,8 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
   const handleDeleteReflection = useCallback(
     async (noteId: string) => {
       try {
-        const db = getDatabase();
         const repo = new ReflectionRepository(db);
-        repo.delete(noteId);
+        await repo.delete(noteId);
 
         const reflection = reflections.find((r) => r.noteId === noteId);
         if (reflection) {
@@ -141,11 +143,11 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
         }
 
         setReflections((prev) => prev.filter((r) => r.noteId !== noteId));
-      } catch {
-        // Delete error
+      } catch (error) {
+        console.error('ReflectionRecorder delete error:', error);
       }
     },
-    [reflections]
+    [db, reflections, verseId]
   );
 
   const formatDuration = (seconds: number): string => {
@@ -235,7 +237,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
               ]}
             >
               <Pressable
-                onPress={() => handlePlayReflection(item)}
+                onPress={() => void handlePlayReflection(item)}
                 accessibilityRole="button"
                 accessibilityLabel={`Play reflection from ${new Date(item.createdAt).toLocaleDateString()}, ${formatDuration(item.durationSeconds)}`}
                 style={styles.reflectionPlayArea}
@@ -261,7 +263,7 @@ export function ReflectionRecorder({ verseId }: ReflectionRecorderProps) {
               </Pressable>
               <IconButtonAccessible
                 iconName="trash-outline"
-                onPress={() => handleDeleteReflection(item.noteId)}
+                onPress={() => void handleDeleteReflection(item.noteId)}
                 accessibilityLabel={`Delete reflection from ${new Date(item.createdAt).toLocaleDateString()}`}
                 color={colors.error}
                 size={22}

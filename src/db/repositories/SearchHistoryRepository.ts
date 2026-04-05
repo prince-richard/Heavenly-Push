@@ -21,22 +21,22 @@ function rowToItem(row: SearchHistoryRow): SearchHistoryItem {
 export class SearchHistoryRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  add(query: string, language: string): void {
-    this.db.runSync(
+  async add(query: string, language: string): Promise<void> {
+    await this.db.runAsync(
       'INSERT INTO search_history (id, query, language, created_at) VALUES (?, ?, ?, ?)',
       [generateId(), query, language, new Date().toISOString()],
     );
   }
 
-  getRecent(limit: number): SearchHistoryItem[] {
-    const rows = this.db.getAllSync<SearchHistoryRow>(
+  async getRecent(limit: number): Promise<SearchHistoryItem[]> {
+    const rows = await this.db.getAllAsync<SearchHistoryRow>(
       'SELECT * FROM search_history ORDER BY created_at DESC LIMIT ?',
       [limit],
     );
     return rows.map(rowToItem);
   }
 
-  clear(): void {
-    this.db.runSync('DELETE FROM search_history');
+  async clear(): Promise<void> {
+    await this.db.runAsync('DELETE FROM search_history');
   }
 }

@@ -22,8 +22,8 @@ function rowToReflection(row: ReflectionRow): VoiceReflection {
 export class ReflectionRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  save(reflection: VoiceReflection): void {
-    this.db.runSync(
+  async save(reflection: VoiceReflection): Promise<void> {
+    await this.db.runAsync(
       `INSERT OR REPLACE INTO reflections (note_id, verse_id, audio_file_uri, duration_seconds, created_at)
        VALUES (?, ?, ?, ?, ?)`,
       [
@@ -36,20 +36,20 @@ export class ReflectionRepository {
     );
   }
 
-  getByVerseId(verseId: string): VoiceReflection[] {
-    const rows = this.db.getAllSync<ReflectionRow>(
+  async getByVerseId(verseId: string): Promise<VoiceReflection[]> {
+    const rows = await this.db.getAllAsync<ReflectionRow>(
       'SELECT * FROM reflections WHERE verse_id = ? ORDER BY created_at DESC',
       [verseId],
     );
     return rows.map(rowToReflection);
   }
 
-  delete(noteId: string): void {
-    this.db.runSync('DELETE FROM reflections WHERE note_id = ?', [noteId]);
+  async delete(noteId: string): Promise<void> {
+    await this.db.runAsync('DELETE FROM reflections WHERE note_id = ?', [noteId]);
   }
 
-  getAll(): VoiceReflection[] {
-    const rows = this.db.getAllSync<ReflectionRow>(
+  async getAll(): Promise<VoiceReflection[]> {
+    const rows = await this.db.getAllAsync<ReflectionRow>(
       'SELECT * FROM reflections ORDER BY created_at DESC',
     );
     return rows.map(rowToReflection);

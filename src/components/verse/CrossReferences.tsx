@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { SectionHeader } from '@/components/common/SectionHeader';
 import { VerseCard } from './VerseCard';
 import type { BibleVerse } from '@/types/models';
-import { getDatabase } from '@/db/database';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
 import crossReferencesData from '@/data/seed/cross-references.json';
 
@@ -20,6 +20,7 @@ export function CrossReferences({
   onVersePress,
 }: CrossReferencesProps) {
   const { t } = useTranslation();
+  const db = useDatabase();
   const [relatedVerses, setRelatedVerses] = useState<BibleVerse[]>([]);
 
   useEffect(() => {
@@ -29,17 +30,23 @@ export function CrossReferences({
       return;
     }
 
-    try {
-      const db = getDatabase();
-      const repo = new VerseRepository(db);
-      const verses = refIds
-        .map((id) => repo.getById(id))
-        .filter((v): v is BibleVerse => v !== null);
-      setRelatedVerses(verses);
-    } catch {
-      setRelatedVerses([]);
+    async function loadRefs() {
+      try {
+        const repo = new VerseRepository(db);
+        const verses: BibleVerse[] = [];
+        for (const id of refIds) {
+          const v = await repo.getById(id);
+          if (v) verses.push(v);
+        }
+        setRelatedVerses(verses);
+      } catch (error) {
+        console.error('CrossReferences load error:', error);
+        setRelatedVerses([]);
+      }
     }
-  }, [verseId]);
+
+    void loadRefs();
+  }, [db, verseId]);
 
   if (relatedVerses.length === 0) {
     return null;

@@ -1,8 +1,8 @@
 import type { SQLiteDatabase } from 'expo-sqlite';
 
-export function up(db: SQLiteDatabase): void {
+export async function up(db: SQLiteDatabase): Promise<void> {
   // Verses table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS verses (
       id TEXT PRIMARY KEY,
       translation_id TEXT NOT NULL,
@@ -20,12 +20,12 @@ export function up(db: SQLiteDatabase): void {
     );
   `);
 
-  db.execSync(`
+  await db.execAsync(`
     CREATE INDEX IF NOT EXISTS idx_verses_ref ON verses(book_code, chapter, verse);
   `);
 
   // FTS5 virtual table
-  db.execSync(`
+  await db.execAsync(`
     CREATE VIRTUAL TABLE IF NOT EXISTS verses_fts USING fts5(
       text_en, text_ta, keywords_en, keywords_ta, theme_tags,
       content=verses, content_rowid=rowid
@@ -33,21 +33,21 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Sync triggers for FTS
-  db.execSync(`
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS verses_ai AFTER INSERT ON verses BEGIN
       INSERT INTO verses_fts(rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
       VALUES (new.rowid, new.text_en, new.text_ta, new.keywords_en, new.keywords_ta, new.theme_tags);
     END;
   `);
 
-  db.execSync(`
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS verses_ad AFTER DELETE ON verses BEGIN
       INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
       VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
     END;
   `);
 
-  db.execSync(`
+  await db.execAsync(`
     CREATE TRIGGER IF NOT EXISTS verses_au AFTER UPDATE ON verses BEGIN
       INSERT INTO verses_fts(verses_fts, rowid, text_en, text_ta, keywords_en, keywords_ta, theme_tags)
       VALUES ('delete', old.rowid, old.text_en, old.text_ta, old.keywords_en, old.keywords_ta, old.theme_tags);
@@ -57,7 +57,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Favorites table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS favorites (
       id TEXT PRIMARY KEY,
       verse_id TEXT NOT NULL,
@@ -67,7 +67,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Settings table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT NOT NULL
@@ -75,7 +75,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Reflections table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS reflections (
       note_id TEXT PRIMARY KEY,
       verse_id TEXT NOT NULL,
@@ -86,7 +86,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Search history table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS search_history (
       id TEXT PRIMARY KEY,
       query TEXT NOT NULL,
@@ -96,7 +96,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Audio plans table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS audio_plans (
       plan_id TEXT PRIMARY KEY,
       payload TEXT NOT NULL
@@ -104,7 +104,7 @@ export function up(db: SQLiteDatabase): void {
   `);
 
   // Daily verses table
-  db.execSync(`
+  await db.execAsync(`
     CREATE TABLE IF NOT EXISTS daily_verses (
       id TEXT PRIMARY KEY,
       verse_id TEXT NOT NULL,

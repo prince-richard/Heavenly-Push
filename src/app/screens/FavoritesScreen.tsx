@@ -10,10 +10,9 @@ import { VerseCard } from '@/components/verse/VerseCard';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
-import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
 import type { BibleVerse } from '@/types/models';
-import { getDatabase } from '@/db/database';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
 import { FavoritesRepository } from '@/db/repositories/FavoritesRepository';
 
@@ -23,6 +22,7 @@ export function FavoritesScreen() {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
   const navigation = useNavigation<FavNav>();
+  const db = useDatabase();
   const favoriteIds = useFavoritesStore((s) => s.favoriteIds);
   const removeFavorite = useFavoritesStore((s) => s.remove);
 
@@ -31,21 +31,30 @@ export function FavoritesScreen() {
 
   // Load favorite verses
   useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    try {
-      const db = getDatabase();
-      const verseRepo = new VerseRepository(db);
-      const ids = Array.from(favoriteIds);
-      const loaded = ids
-        .map((id) => verseRepo.getById(id))
-        .filter((v): v is BibleVerse => v !== null);
-      setVerses(loaded);
-    } catch {
-      setVerses([]);
-    } finally {
-      setLoading(false);
+
+    async function loadFavs() {
+      try {
+        const verseRepo = new VerseRepository(db);
+        const ids = Array.from(favoriteIds);
+        const loaded: BibleVerse[] = [];
+        for (const id of ids) {
+          const v = await verseRepo.getById(id);
+          if (v) loaded.push(v);
+        }
+        if (!cancelled) setVerses(loaded);
+      } catch (error) {
+        console.error('FavoritesScreen load error:', error);
+        if (!cancelled) setVerses([]);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     }
-  }, [favoriteIds]);
+
+    void loadFavs();
+    return () => { cancelled = true; };
+  }, [db, favoriteIds]);
 
   const handleVersePress = useCallback(
     (verse: BibleVerse) => {
@@ -59,19 +68,21 @@ export function FavoritesScreen() {
       removeFavorite(verseId);
 
       // Also remove from DB
-      try {
-        const db = getDatabase();
-        const favRepo = new FavoritesRepository(db);
-        favRepo.remove(verseId);
-      } catch {
-        // DB sync error — store already updated optimistically
+      async function removeFromDb() {
+        try {
+          const favRepo = new FavoritesRepository(db);
+          await favRepo.remove(verseId);
+        } catch (error) {
+          console.error('FavoritesScreen remove error:', error);
+        }
       }
+      void removeFromDb();
 
       AccessibilityInfo.announceForAccessibility(
         t('favorites.remove')
       );
     },
-    [removeFavorite, t]
+    [db, removeFavorite, t]
   );
 
   if (loading) {

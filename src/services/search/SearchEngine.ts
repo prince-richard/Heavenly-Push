@@ -28,7 +28,7 @@ export class SearchEngine {
    * 5. Try fuzzy matching (score: 20)
    * 6. Deduplicate, sort by score, cap at maxResults
    */
-  search(query: string, options?: SearchOptions): SearchResult[] {
+  async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
     const maxResults = options?.maxResults ?? MAX_SEARCH_RESULTS;
     const language = options?.language;
     const normalized = normalize(query);
@@ -40,7 +40,7 @@ export class SearchEngine {
     // Step 1: Try reference parse
     const ref = parse(normalized);
     if (ref) {
-      const verses = this.verseRepo.getByReference(
+      const verses = await this.verseRepo.getByReference(
         ref.bookCode,
         ref.chapter,
         ref.verse,
@@ -53,7 +53,7 @@ export class SearchEngine {
     // Step 2: FTS search
     const lang =
       language === 'auto' ? undefined : (language as SupportedLanguage | undefined);
-    const ftsResults = this.verseRepo.searchFTS(normalized, lang);
+    const ftsResults = await this.verseRepo.searchFTS(normalized, lang);
     for (const verse of ftsResults) {
       // Check if it's a closer match (exact substring) or just FTS keyword
       const isExact = this.isExactMatch(verse, normalized);
@@ -69,7 +69,7 @@ export class SearchEngine {
         : mapMoodToThemes(query);
 
     if (themes.length > 0) {
-      const themeResults = this.verseRepo.searchByThemes(themes);
+      const themeResults = await this.verseRepo.searchByThemes(themes);
       for (const verse of themeResults) {
         this.addResult(resultMap, verse, 40, 'theme');
       }
@@ -77,7 +77,7 @@ export class SearchEngine {
 
     // Step 4: Fuzzy matching (only if we have few results)
     if (resultMap.size < 5) {
-      this.addFuzzyResults(resultMap, normalized, lang);
+      await this.addFuzzyResults(resultMap, normalized, lang);
     }
 
     // Sort by score descending, then cap
@@ -114,12 +114,12 @@ export class SearchEngine {
     return textEn.includes(q) || textTa.includes(q);
   }
 
-  private addFuzzyResults(
+  private async addFuzzyResults(
     map: Map<string, SearchResult>,
     query: string,
     language?: SupportedLanguage,
-  ): void {
-    const allVerses = this.verseRepo.getAll();
+  ): Promise<void> {
+    const allVerses = await this.verseRepo.getAll();
     const threshold = 0.4;
 
     for (const verse of allVerses) {

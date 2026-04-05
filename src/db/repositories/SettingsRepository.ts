@@ -8,23 +8,23 @@ interface SettingRow {
 export class SettingsRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  get(key: string): string | null {
-    const row = this.db.getFirstSync<SettingRow>(
+  async get(key: string): Promise<string | null> {
+    const row = await this.db.getFirstAsync<SettingRow>(
       'SELECT * FROM settings WHERE key = ?',
       [key],
     );
     return row?.value ?? null;
   }
 
-  set(key: string, value: string): void {
-    this.db.runSync(
+  async set(key: string, value: string): Promise<void> {
+    await this.db.runAsync(
       'INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)',
       [key, value],
     );
   }
 
-  getAll(): Record<string, string> {
-    const rows = this.db.getAllSync<SettingRow>('SELECT * FROM settings');
+  async getAll(): Promise<Record<string, string>> {
+    const rows = await this.db.getAllAsync<SettingRow>('SELECT * FROM settings');
     const result: Record<string, string> = {};
     for (const row of rows) {
       result[row.key] = row.value;

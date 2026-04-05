@@ -13,34 +13,34 @@ function rowToPlan(row: PlanRow): AudioPlan {
 export class PlanRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  getAll(): AudioPlan[] {
-    const rows = this.db.getAllSync<PlanRow>(
+  async getAll(): Promise<AudioPlan[]> {
+    const rows = await this.db.getAllAsync<PlanRow>(
       'SELECT * FROM audio_plans ORDER BY plan_id',
     );
     return rows.map(rowToPlan);
   }
 
-  getById(planId: string): AudioPlan | null {
-    const row = this.db.getFirstSync<PlanRow>(
+  async getById(planId: string): Promise<AudioPlan | null> {
+    const row = await this.db.getFirstAsync<PlanRow>(
       'SELECT * FROM audio_plans WHERE plan_id = ?',
       [planId],
     );
     return row ? rowToPlan(row) : null;
   }
 
-  save(plan: AudioPlan): void {
-    this.db.runSync(
+  async save(plan: AudioPlan): Promise<void> {
+    await this.db.runAsync(
       'INSERT OR REPLACE INTO audio_plans (plan_id, payload) VALUES (?, ?)',
       [plan.planId, JSON.stringify(plan)],
     );
   }
 
-  updateProgress(planId: string, currentDay: number): void {
-    const plan = this.getById(planId);
+  async updateProgress(planId: string, currentDay: number): Promise<void> {
+    const plan = await this.getById(planId);
     if (!plan) return;
 
     plan.currentDay = currentDay;
     plan.completed = currentDay >= plan.totalDays;
-    this.save(plan);
+    await this.save(plan);
   }
 }

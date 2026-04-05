@@ -25,8 +25,8 @@ interface SeedVerseTa {
  * Seeds the verses table if it's empty.
  * Merges English and Tamil data by verse ID.
  */
-export function seedVerses(db: SQLiteDatabase): void {
-  const count = db.getFirstSync<{ cnt: number }>(
+export async function seedVerses(db: SQLiteDatabase): Promise<void> {
+  const count = await db.getFirstAsync<{ cnt: number }>(
     'SELECT COUNT(*) as cnt FROM verses',
   );
 
@@ -40,18 +40,18 @@ export function seedVerses(db: SQLiteDatabase): void {
     taMap.set(ta.id, ta);
   }
 
-  const stmt = db.prepareSync(
+  const stmt = await db.prepareAsync(
     `INSERT INTO verses (id, translation_id, book_code, book_name_en, book_name_ta, chapter, verse, text_en, text_ta, transliteration_ta, theme_tags, keywords_en, keywords_ta)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
   );
 
   try {
-    db.execSync('BEGIN TRANSACTION');
+    await db.execAsync('BEGIN TRANSACTION');
 
     for (const en of versesEn as SeedVerseEn[]) {
       const ta = taMap.get(en.id);
 
-      stmt.executeSync(
+      await stmt.executeAsync([
         en.id,
         en.translationId,
         en.bookCode,
@@ -65,14 +65,14 @@ export function seedVerses(db: SQLiteDatabase): void {
         JSON.stringify(en.themeTags),
         JSON.stringify(en.keywordsEn),
         JSON.stringify(ta?.keywordsTa ?? []),
-      );
+      ]);
     }
 
-    db.execSync('COMMIT');
+    await db.execAsync('COMMIT');
   } catch (error) {
-    db.execSync('ROLLBACK');
+    await db.execAsync('ROLLBACK');
     throw error;
   } finally {
-    stmt.finalizeSync();
+    await stmt.finalizeAsync();
   }
 }

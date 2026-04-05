@@ -38,28 +38,28 @@ function rowToVerse(row: VerseRow): BibleVerse {
 export class VerseRepository {
   constructor(private db: SQLiteDatabase) {}
 
-  getById(id: string): BibleVerse | null {
-    const row = this.db.getFirstSync<VerseRow>(
+  async getById(id: string): Promise<BibleVerse | null> {
+    const row = await this.db.getFirstAsync<VerseRow>(
       'SELECT * FROM verses WHERE id = ?',
       [id],
     );
     return row ? rowToVerse(row) : null;
   }
 
-  getByReference(
+  async getByReference(
     bookCode: string,
     chapter: number,
     verse?: number,
-  ): BibleVerse[] {
+  ): Promise<BibleVerse[]> {
     if (verse !== undefined) {
-      const rows = this.db.getAllSync<VerseRow>(
+      const rows = await this.db.getAllAsync<VerseRow>(
         'SELECT * FROM verses WHERE book_code = ? AND chapter = ? AND verse = ?',
         [bookCode, chapter, verse],
       );
       return rows.map(rowToVerse);
     }
 
-    const rows = this.db.getAllSync<VerseRow>(
+    const rows = await this.db.getAllAsync<VerseRow>(
       'SELECT * FROM verses WHERE book_code = ? AND chapter = ? ORDER BY verse',
       [bookCode, chapter],
     );
@@ -71,14 +71,14 @@ export class VerseRepository {
    * @param verseId The center verse ID
    * @param range Number of verses before and after to include
    */
-  getContext(verseId: string, range: number): BibleVerse[] {
-    const center = this.getById(verseId);
+  async getContext(verseId: string, range: number): Promise<BibleVerse[]> {
+    const center = await this.getById(verseId);
     if (!center) return [];
 
     const minVerse = center.verse - range;
     const maxVerse = center.verse + range;
 
-    const rows = this.db.getAllSync<VerseRow>(
+    const rows = await this.db.getAllAsync<VerseRow>(
       `SELECT * FROM verses
        WHERE book_code = ? AND chapter = ? AND verse >= ? AND verse <= ?
        ORDER BY verse`,
@@ -92,7 +92,7 @@ export class VerseRepository {
    * @param query The search query
    * @param language Optional language filter
    */
-  searchFTS(query: string, language?: SupportedLanguage): BibleVerse[] {
+  async searchFTS(query: string, language?: SupportedLanguage): Promise<BibleVerse[]> {
     // Escape FTS5 special characters
     const sanitized = query.replace(/['"]/g, '').trim();
     if (!sanitized) return [];
@@ -108,7 +108,7 @@ export class VerseRepository {
     }
 
     try {
-      const rows = this.db.getAllSync<VerseRow>(
+      const rows = await this.db.getAllAsync<VerseRow>(
         `SELECT v.* FROM verses v
          JOIN verses_fts fts ON v.rowid = fts.rowid
          WHERE verses_fts MATCH ?
@@ -126,14 +126,14 @@ export class VerseRepository {
   /**
    * Fallback search using LIKE when FTS fails.
    */
-  private searchLike(
+  private async searchLike(
     query: string,
     language?: SupportedLanguage,
-  ): BibleVerse[] {
+  ): Promise<BibleVerse[]> {
     const pattern = `%${query}%`;
 
     if (language === 'en') {
-      const rows = this.db.getAllSync<VerseRow>(
+      const rows = await this.db.getAllAsync<VerseRow>(
         'SELECT * FROM verses WHERE text_en LIKE ? OR keywords_en LIKE ? LIMIT 20',
         [pattern, pattern],
       );
@@ -141,14 +141,14 @@ export class VerseRepository {
     }
 
     if (language === 'ta') {
-      const rows = this.db.getAllSync<VerseRow>(
+      const rows = await this.db.getAllAsync<VerseRow>(
         'SELECT * FROM verses WHERE text_ta LIKE ? OR keywords_ta LIKE ? LIMIT 20',
         [pattern, pattern],
       );
       return rows.map(rowToVerse);
     }
 
-    const rows = this.db.getAllSync<VerseRow>(
+    const rows = await this.db.getAllAsync<VerseRow>(
       `SELECT * FROM verses
        WHERE text_en LIKE ? OR text_ta LIKE ? OR keywords_en LIKE ? OR keywords_ta LIKE ? OR theme_tags LIKE ?
        LIMIT 20`,
@@ -160,13 +160,13 @@ export class VerseRepository {
   /**
    * Search by theme tags.
    */
-  searchByThemes(themes: string[]): BibleVerse[] {
+  async searchByThemes(themes: string[]): Promise<BibleVerse[]> {
     if (themes.length === 0) return [];
 
     const conditions = themes.map(() => 'theme_tags LIKE ?').join(' OR ');
     const params = themes.map((t) => `%"${t}"%`);
 
-    const rows = this.db.getAllSync<VerseRow>(
+    const rows = await this.db.getAllAsync<VerseRow>(
       `SELECT * FROM verses WHERE ${conditions} LIMIT 20`,
       params,
     );
@@ -176,31 +176,31 @@ export class VerseRepository {
   /**
    * Returns a random verse, optionally excluding specific IDs.
    */
-  getRandom(excludeIds?: string[]): BibleVerse | null {
+  async getRandom(excludeIds?: string[]): Promise<BibleVerse | null> {
     if (excludeIds && excludeIds.length > 0) {
       const placeholders = excludeIds.map(() => '?').join(',');
-      const row = this.db.getFirstSync<VerseRow>(
+      const row = await this.db.getFirstAsync<VerseRow>(
         `SELECT * FROM verses WHERE id NOT IN (${placeholders}) ORDER BY RANDOM() LIMIT 1`,
         excludeIds,
       );
       return row ? rowToVerse(row) : null;
     }
 
-    const row = this.db.getFirstSync<VerseRow>(
+    const row = await this.db.getFirstAsync<VerseRow>(
       'SELECT * FROM verses ORDER BY RANDOM() LIMIT 1',
     );
     return row ? rowToVerse(row) : null;
   }
 
-  getAll(): BibleVerse[] {
-    const rows = this.db.getAllSync<VerseRow>(
+  async getAll(): Promise<BibleVerse[]> {
+    const rows = await this.db.getAllAsync<VerseRow>(
       'SELECT * FROM verses ORDER BY book_code, chapter, verse',
     );
     return rows.map(rowToVerse);
   }
 
-  count(): number {
-    const result = this.db.getFirstSync<{ cnt: number }>(
+  async count(): Promise<number> {
+    const result = await this.db.getFirstAsync<{ cnt: number }>(
       'SELECT COUNT(*) as cnt FROM verses',
     );
     return result?.cnt ?? 0;

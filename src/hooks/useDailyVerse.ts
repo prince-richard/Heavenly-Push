@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { BibleVerse, DailyVerse } from '@/types/models';
-import { getDatabase } from '@/db/database';
+import { useDatabase } from '@/contexts/DatabaseContext';
 import { VerseRepository } from '@/db/repositories/VerseRepository';
 import { DailyVerseRepository } from '@/db/repositories/DailyVerseRepository';
 import { DAILY_VERSE_EXCLUSION_WINDOW } from '@/constants/config';
@@ -19,6 +19,7 @@ function getTodayDateString(): string {
 }
 
 export function useDailyVerse(): DailyVerseResult {
+  const db = useDatabase();
   const [verse, setVerse] = useState<BibleVerse | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,26 +28,25 @@ export function useDailyVerse(): DailyVerseResult {
 
     async function resolve() {
       try {
-        const db = getDatabase();
         const dailyRepo = new DailyVerseRepository(db);
         const verseRepo = new VerseRepository(db);
         const today = getTodayDateString();
 
         // Check if we already have a daily verse for today
-        const existing = dailyRepo.getByDate(today);
+        const existing = await dailyRepo.getByDate(today);
         if (existing && !cancelled) {
-          const found = verseRepo.getById(existing.verseId);
+          const found = await verseRepo.getById(existing.verseId);
           setVerse(found);
           setLoading(false);
           return;
         }
 
         // Get recent verse IDs to exclude
-        const recentEntries = dailyRepo.getRecent(DAILY_VERSE_EXCLUSION_WINDOW) as DailyVerse[];
+        const recentEntries = await dailyRepo.getRecent(DAILY_VERSE_EXCLUSION_WINDOW) as DailyVerse[];
         const recentIds = new Set(recentEntries.map((e: DailyVerse) => e.verseId));
 
         // Get all verses and pick one not recently shown
-        const allVerses = verseRepo.getAll() as BibleVerse[];
+        const allVerses = await verseRepo.getAll() as BibleVerse[];
         const candidates = allVerses.filter((v: BibleVerse) => !recentIds.has(v.id));
 
         // If all have been shown recently, pick from all
@@ -63,13 +63,14 @@ export function useDailyVerse(): DailyVerseResult {
         const selected = pool[Math.floor(Math.random() * pool.length)];
 
         // Save today's daily verse
-        dailyRepo.save(selected.id, today);
+        await dailyRepo.save(selected.id, today);
 
         if (!cancelled) {
           setVerse(selected);
           setLoading(false);
         }
-      } catch {
+      } catch (error) {
+        console.error('useDailyVerse error:', error);
         if (!cancelled) {
           setVerse(null);
           setLoading(false);
@@ -77,12 +78,12 @@ export function useDailyVerse(): DailyVerseResult {
       }
     }
 
-    resolve();
+    void resolve();
 
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [db]);
 
   return { verse, loading };
 }

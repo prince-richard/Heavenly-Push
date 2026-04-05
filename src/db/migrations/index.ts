@@ -3,7 +3,7 @@ import { up as migration001 } from './001_initial';
 
 interface Migration {
   version: number;
-  up: (db: SQLiteDatabase) => void;
+  up: (db: SQLiteDatabase) => Promise<void>;
 }
 
 const migrations: Migration[] = [
@@ -14,16 +14,16 @@ const migrations: Migration[] = [
  * Runs all pending migrations based on PRAGMA user_version.
  * Returns the final version number.
  */
-export function runMigrations(db: SQLiteDatabase): number {
-  const result = db.getFirstSync<{ user_version: number }>(
+export async function runMigrations(db: SQLiteDatabase): Promise<number> {
+  const result = await db.getFirstAsync<{ user_version: number }>(
     'PRAGMA user_version',
   );
   let currentVersion = result?.user_version ?? 0;
 
   for (const migration of migrations) {
     if (migration.version > currentVersion) {
-      migration.up(db);
-      db.execSync(`PRAGMA user_version = ${migration.version}`);
+      await migration.up(db);
+      await db.execAsync(`PRAGMA user_version = ${migration.version}`);
       currentVersion = migration.version;
     }
   }
