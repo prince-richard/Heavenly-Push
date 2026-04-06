@@ -111,6 +111,25 @@
     "notificationMessage": "To receive daily verses, please allow notifications in your device settings.",
     "notificationAction": "Open Settings"
   },
+  "ai": {
+    "title": "AI Bible Assistant",
+    "askPlaceholder": "Ask a question about this verse...",
+    "askButton": "Ask",
+    "loading": "Getting explanation...",
+    "explanation": "Explanation",
+    "summary": "Summary",
+    "error": "Failed to get explanation. Please try again.",
+    "retry": "Try Again",
+    "poweredBy": "Powered by {{provider}}",
+    "fallbackUsed": "Used fallback provider",
+    "suggest": {
+      "explain": "Explain this verse",
+      "lesson": "What lesson can I learn?",
+      "summarize": "Summarize in simple words",
+      "context": "What is the historical context?",
+      "tamil": "Explain in Tamil"
+    }
+  },
   "accessibility": {
     "tabHome": "Home tab",
     "tabSearch": "Search tab",

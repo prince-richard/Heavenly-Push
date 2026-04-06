@@ -29,6 +29,7 @@ import { SectionHeader } from '@/components/common/SectionHeader';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
+import { AiBibleAssistant } from '@/components/ai/AiBibleAssistant';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
 import type { BibleVerse } from '@/types/models';
@@ -301,6 +302,13 @@ export function VerseDetailScreen() {
         <HistoricalContext
           verseId={currentVerse.id}
           bookCode={currentVerse.bookCode}
+        />
+
+        {/* AI Bible Assistant */}
+        <AiBibleAssistant
+          verseReference={`${currentVerse.bookNameEn} ${currentVerse.chapter}:${currentVerse.verse}`}
+          verseText={currentVerse.textEn ?? currentVerse.textTa ?? ''}
+          verseId={currentVerse.id}
         />
 
         {/* Cross References */}
