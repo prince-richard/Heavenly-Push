@@ -11,6 +11,11 @@ import { normalize } from './QueryNormalizer';
 import { parse } from './ReferenceParser';
 import { mapMoodToThemes } from './MoodMapper';
 import { normalizedLevenshteinSimilarity } from '../../utils/textSimilarity';
+import { bookCodeToInfo } from '../../data/dictionaries/book-codes';
+import {
+  lookupParallelVerse,
+  type ApiParallelVerse,
+} from '../bible/VerseLookupService';
 
 export class SearchEngine {
   private verseRepo: VerseRepository;
@@ -27,6 +32,7 @@ export class SearchEngine {
    * 4. Try mood/theme mapping (score: 40)
    * 5. Try fuzzy matching (score: 20)
    * 6. Deduplicate, sort by score, cap at maxResults
+   * 7. If no results and query looks like a reference, try API fallback
    */
   async search(query: string, options?: SearchOptions): Promise<SearchResult[]> {
     const maxResults = options?.maxResults ?? MAX_SEARCH_RESULTS;
@@ -81,11 +87,66 @@ export class SearchEngine {
     }
 
     // Sort by score descending, then cap
-    const results = Array.from(resultMap.values()).sort(
+    let results = Array.from(resultMap.values()).sort(
       (a, b) => b.score - a.score,
     );
 
+    // Step 5: API fallback when we have no results and query looks like a reference
+    if (results.length === 0 && ref) {
+      const apiResult = await this.tryApiFallback(query, ref);
+      if (apiResult) {
+        results = [apiResult];
+      }
+    }
+
     return results.slice(0, maxResults);
+  }
+
+  /**
+   * Attempts to fetch a verse from the server API when local DB has no match.
+   * Returns null if offline, API fails, or verse not found.
+   */
+  private async tryApiFallback(
+    rawQuery: string,
+    ref: { bookCode: string; chapter: number; verse?: number },
+  ): Promise<SearchResult | null> {
+    // Only try API for specific verse references (with verse number)
+    if (ref.verse === undefined) return null;
+
+    try {
+      // Reconstruct a human-readable reference for the API
+      const bookInfo = bookCodeToInfo[ref.bookCode];
+      const bookName = bookInfo ? bookInfo.nameEn : ref.bookCode;
+      const refString = `${bookName} ${ref.chapter}:${ref.verse}`;
+
+      const parallel: ApiParallelVerse = await lookupParallelVerse(refString);
+
+      // Check if at least one language was found
+      if (!parallel.english.found && !parallel.tamil.found) {
+        return null;
+      }
+
+      // Build a synthetic BibleVerse from the API response
+      const verse: BibleVerse = {
+        id: `api-${ref.bookCode}-${ref.chapter}-${ref.verse}`,
+        translationId: 'api',
+        bookNameEn: bookInfo?.nameEn ?? ref.bookCode,
+        bookNameTa: bookInfo?.nameTa ?? ref.bookCode,
+        bookCode: ref.bookCode,
+        chapter: ref.chapter,
+        verse: ref.verse,
+        textEn: parallel.english.found ? parallel.english.text : undefined,
+        textTa: parallel.tamil.found ? parallel.tamil.text : undefined,
+        keywordsEn: [],
+        keywordsTa: [],
+        themeTags: [],
+      };
+
+      return { verse, score: 95, matchType: 'api' };
+    } catch {
+      // Network error, timeout, etc. -- gracefully degrade to no results
+      return null;
+    }
   }
 
   private addResult(

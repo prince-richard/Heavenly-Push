@@ -72,7 +72,7 @@ export interface DailyVerse {
 export interface SearchResult {
   verse: BibleVerse;
   score: number;
-  matchType: 'reference' | 'exact' | 'fts' | 'theme' | 'fuzzy';
+  matchType: 'reference' | 'exact' | 'fts' | 'theme' | 'fuzzy' | 'api';
 }
 
 export interface SearchOptions {

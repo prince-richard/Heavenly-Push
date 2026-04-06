@@ -6,6 +6,7 @@ import { config } from '../config/env';
 
 const bibleProvider = new BollsBibleProvider();
 const cache = new SimpleCache<ExplainResult>(10 * 60 * 1000); // 10 min TTL
+const chatCache = new SimpleCache<ChatResult>(10 * 60 * 1000); // 10 min TTL
 
 export interface ExplainRequest {
   question: string;
@@ -83,6 +84,91 @@ export async function explainVerse(request: ExplainRequest): Promise<ExplainResu
 
   // 5. Cache the result
   cache.set(cacheKey, result);
+
+  return result;
+}
+
+export interface ChatRequest {
+  question: string;
+  preferredLanguage: 'en' | 'ta';
+}
+
+export interface ChatResult {
+  answer: string;
+  references: Array<{ reference: string; text: string }>;
+  providerUsed: string;
+}
+
+export async function chatAboutBible(request: ChatRequest): Promise<ChatResult> {
+  const { question, preferredLanguage } = request;
+
+  // Check cache
+  const cacheKey = `chat:${question}:${preferredLanguage}`;
+  const cached = chatCache.get(cacheKey);
+  if (cached) return cached;
+
+  // Try to parse a reference from the question
+  const parsed = parseReference(question);
+  let verseContext = '';
+  const references: Array<{ reference: string; text: string }> = [];
+
+  if (parsed) {
+    // Fetch verse text to ground the AI response
+    try {
+      const parallel = await bibleProvider.getParallelVerse(
+        parsed,
+        config.englishBibleVersion,
+        config.tamilBibleVersion
+      );
+
+      const englishText = parallel.english.found ? parallel.english.text : '';
+      const tamilText = parallel.tamil.found ? parallel.tamil.text : '';
+      const refStr = `${parsed.book} ${parsed.chapter}:${parsed.verse}`;
+
+      if (englishText || tamilText) {
+        verseContext = `\n\nReferenced Verse: ${refStr}\nEnglish: ${englishText}\nTamil: ${tamilText}`;
+        references.push({
+          reference: refStr,
+          text: preferredLanguage === 'ta' ? (tamilText || englishText) : (englishText || tamilText),
+        });
+      }
+    } catch {
+      // If verse fetch fails, proceed without it
+    }
+  }
+
+  // Build the user message for the AI
+  const language = preferredLanguage === 'ta' ? 'Tamil' : 'English';
+  const userMessage = `Question: ${question}\nPreferred Language: ${language}${verseContext}\n\nPlease provide a clear, helpful answer. Do NOT respond in JSON — just provide your answer as plain text.`;
+
+  // Use the fallback manager with a chat-specific input
+  const { output } = await generateWithFallback({
+    verseText: verseContext ? 'See referenced verse below' : 'No specific verse referenced',
+    reference: parsed ? `${parsed.book} ${parsed.chapter}:${parsed.verse}` : 'General question',
+    question: userMessage,
+    language,
+  });
+
+  // The AI may return JSON (because the prompt builder asks for it) — extract the explanation
+  let answer = output.explanation;
+
+  // Clean up: if the answer looks like it still has JSON artifacts, strip them
+  if (answer.startsWith('{') || answer.startsWith('"')) {
+    try {
+      const parsed2 = JSON.parse(answer) as { explanation?: string };
+      if (parsed2.explanation) answer = parsed2.explanation;
+    } catch {
+      // Use as-is
+    }
+  }
+
+  const result: ChatResult = {
+    answer,
+    references,
+    providerUsed: output.provider,
+  };
+
+  chatCache.set(cacheKey, result);
 
   return result;
 }

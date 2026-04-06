@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   AccessibilityInfo,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -54,6 +55,7 @@ export function SearchScreen() {
 
   const [languageFilter, setLanguageFilter] = useState<LanguageFilter>('all');
   const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [hasSearched, setHasSearched] = useState(false);
   const lastTranscriptRef = useRef('');
 
   // Handle route params (query passed from other screens)
@@ -88,10 +90,12 @@ export function SearchScreen() {
       const trimmed = searchQuery.trim();
       if (!trimmed) {
         setResults([]);
+        setHasSearched(false);
         return;
       }
 
       setLoading(true);
+      setHasSearched(true);
       try {
         const engine = new SearchEngine(db);
         const langOption: SupportedLanguage | 'auto' =
@@ -107,7 +111,7 @@ export function SearchScreen() {
         // Announce result count for screen readers
         if (searchResults.length > 0) {
           AccessibilityInfo.announceForAccessibility(
-            t('search.resultsCount', { count: searchResults.length })
+            t('search.resultsCount', { count: searchResults.length }),
           );
         } else {
           AccessibilityInfo.announceForAccessibility(t('search.noResults'));
@@ -129,7 +133,17 @@ export function SearchScreen() {
         setLoading(false);
       }
     },
-    [db, languageFilter, selectedThemes, primaryLanguage, t, setResults, setLoading, setRecentHistory, speakText]
+    [
+      db,
+      languageFilter,
+      selectedThemes,
+      primaryLanguage,
+      t,
+      setResults,
+      setLoading,
+      setRecentHistory,
+      speakText,
+    ],
   );
 
   const handleChangeText = useCallback(
@@ -139,9 +153,10 @@ export function SearchScreen() {
         void performSearch(text);
       } else {
         setResults([]);
+        setHasSearched(false);
       }
     },
-    [setQuery, performSearch, setResults]
+    [setQuery, performSearch, setResults],
   );
 
   const handleVoicePress = useCallback(() => {
@@ -156,7 +171,7 @@ export function SearchScreen() {
     (verse: BibleVerse) => {
       navigation.navigate('VerseDetail', { verseId: verse.id });
     },
-    [navigation]
+    [navigation],
   );
 
   const handleLanguageChange = useCallback((lang: LanguageFilter) => {
@@ -165,7 +180,9 @@ export function SearchScreen() {
 
   const handleThemeToggle = useCallback((theme: string) => {
     setSelectedThemes((prev) =>
-      prev.includes(theme) ? prev.filter((t) => t !== theme) : [...prev, theme]
+      prev.includes(theme)
+        ? prev.filter((t) => t !== theme)
+        : [...prev, theme],
     );
   }, []);
 
@@ -184,19 +201,42 @@ export function SearchScreen() {
       <View style={styles.container}>
         {/* Header */}
         <Text
-          style={[styles.title, { color: colors.text }]}
+          style={[styles.title, { color: colors.accent }]}
           accessibilityRole="header"
         >
           {t('search.title')}
         </Text>
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+          {t('search.placeholder')}
+        </Text>
 
-        {/* Search Bar */}
-        <SearchBar
-          value={query}
-          onChangeText={handleChangeText}
-          onSubmit={(text) => void performSearch(text)}
-          onVoicePress={handleVoicePress}
-        />
+        {/* Search Input Card */}
+        <View
+          style={[
+            styles.searchCard,
+            {
+              backgroundColor: colors.cardElevated,
+              borderColor: colors.border,
+              ...Platform.select({
+                ios: {
+                  shadowColor: '#7C3AED',
+                  shadowOffset: { width: 0, height: 2 },
+                  shadowOpacity: 0.08,
+                  shadowRadius: 8,
+                },
+                android: { elevation: 3 },
+                default: {},
+              }),
+            },
+          ]}
+        >
+          <SearchBar
+            value={query}
+            onChangeText={handleChangeText}
+            onSubmit={(text) => void performSearch(text)}
+            onVoicePress={handleVoicePress}
+          />
+        </View>
 
         {/* Filter Pills */}
         <SearchFilterPills
@@ -211,12 +251,31 @@ export function SearchScreen() {
           <LoadingSpinner size="large" />
         ) : results.length > 0 ? (
           <ResultList results={results} onVersePress={handleVersePress} />
-        ) : query.trim() ? (
+        ) : hasSearched && query.trim() ? (
           <EmptyState
-            icon="search-outline"
+            icon="book-outline"
             title={t('search.noResults')}
             subtitle={t('search.noResultsHint')}
           />
+        ) : !hasSearched ? (
+          <View style={styles.promptContainer}>
+            <View
+              style={[
+                styles.promptIconContainer,
+                { backgroundColor: colors.accentLight + '20' },
+              ]}
+            >
+              <Text style={styles.promptEmoji}>{'\u{1F4D6}'}</Text>
+            </View>
+            <Text style={[styles.promptTitle, { color: colors.text }]}>
+              {t('search.title')}
+            </Text>
+            <Text
+              style={[styles.promptHint, { color: colors.textSecondary }]}
+            >
+              Try a verse reference like "John 3:16" or a topic like "love"
+            </Text>
+          </View>
         ) : null}
       </View>
     </SafeAreaView>
@@ -226,11 +285,51 @@ export function SearchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    padding: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
   },
   title: {
     fontSize: 28,
     fontWeight: '700',
+    marginBottom: 4,
+  },
+  subtitle: {
+    fontSize: 15,
+    fontWeight: '400',
     marginBottom: 16,
+  },
+  searchCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  promptContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 60,
+  },
+  promptIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  promptEmoji: {
+    fontSize: 36,
+  },
+  promptTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  promptHint: {
+    fontSize: 15,
+    textAlign: 'center',
+    lineHeight: 22,
+    paddingHorizontal: 40,
   },
 });

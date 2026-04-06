@@ -28,6 +28,32 @@ export interface ExplainResponse {
   warnings: string[];
 }
 
+export interface ChatRequest {
+  question: string;
+  preferredLanguage: 'en' | 'ta';
+}
+
+export interface ChatResponse {
+  answer: string;
+  references: Array<{ reference: string; text: string }>;
+  providerUsed: string;
+}
+
+export async function chatWithBible(request: ChatRequest): Promise<ChatResponse> {
+  const res = await fetch(`${API_BASE}/api/ai-bible/chat`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(request),
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Unknown error', code: 'UNKNOWN' }));
+    throw new Error(error.error || `Request failed: ${res.status}`);
+  }
+
+  return res.json();
+}
+
 export async function explainVerse(request: ExplainRequest): Promise<ExplainResponse> {
   const res = await fetch(`${API_BASE}/api/ai-bible/explain`, {
     method: 'POST',

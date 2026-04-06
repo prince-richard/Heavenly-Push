@@ -1,5 +1,6 @@
 import React from 'react';
-import { ScrollView, Pressable, Text, StyleSheet } from 'react-native';
+import { ScrollView, Pressable, Text, View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
@@ -18,6 +19,19 @@ const THEME_FILTERS = [
   'healing',
   'trust',
 ] as const;
+
+const THEME_ICONS: Record<string, keyof typeof Ionicons.glyphMap> = {
+  love: 'heart-outline',
+  hope: 'sunny-outline',
+  faith: 'shield-outline',
+  comfort: 'hand-left-outline',
+  peace: 'leaf-outline',
+  courage: 'flame-outline',
+  forgiveness: 'refresh-outline',
+  praise: 'musical-notes-outline',
+  healing: 'medkit-outline',
+  trust: 'lock-closed-outline',
+};
 
 interface SearchFilterPillsProps {
   selectedLanguage: LanguageFilter;
@@ -48,6 +62,7 @@ export function SearchFilterPills({
       contentContainerStyle={styles.container}
       accessibilityRole="tablist"
     >
+      {/* Language filters */}
       {languageOptions.map((option) => {
         const isSelected = selectedLanguage === option.key;
         return (
@@ -60,8 +75,12 @@ export function SearchFilterPills({
             style={[
               styles.pill,
               {
-                backgroundColor: isSelected ? colors.accent : colors.card,
-                borderColor: isSelected ? colors.accent : colors.border,
+                backgroundColor: isSelected
+                  ? colors.accent
+                  : 'transparent',
+                borderColor: isSelected
+                  ? colors.accent
+                  : colors.border,
               },
             ]}
           >
@@ -69,7 +88,7 @@ export function SearchFilterPills({
               style={[
                 styles.pillText,
                 {
-                  color: isSelected ? colors.background : colors.text,
+                  color: isSelected ? '#FFFFFF' : colors.textSecondary,
                   fontWeight: isSelected ? '700' : '500',
                 },
               ]}
@@ -80,8 +99,15 @@ export function SearchFilterPills({
         );
       })}
 
+      {/* Divider */}
+      <View
+        style={[styles.divider, { backgroundColor: colors.border }]}
+      />
+
+      {/* Theme filters */}
       {THEME_FILTERS.map((theme) => {
         const isSelected = selectedThemes.includes(theme);
+        const icon = THEME_ICONS[theme];
         return (
           <Pressable
             key={theme}
@@ -91,17 +117,30 @@ export function SearchFilterPills({
             accessibilityState={{ selected: isSelected }}
             style={[
               styles.pill,
+              styles.themePill,
               {
-                backgroundColor: isSelected ? colors.accent : colors.card,
-                borderColor: isSelected ? colors.accent : colors.border,
+                backgroundColor: isSelected
+                  ? colors.accent
+                  : 'transparent',
+                borderColor: isSelected
+                  ? colors.accent
+                  : colors.border,
               },
             ]}
           >
+            {icon && (
+              <Ionicons
+                name={icon}
+                size={14}
+                color={isSelected ? '#FFFFFF' : colors.textSecondary}
+                style={styles.pillIcon}
+              />
+            )}
             <Text
               style={[
                 styles.pillText,
                 {
-                  color: isSelected ? colors.background : colors.text,
+                  color: isSelected ? '#FFFFFF' : colors.textSecondary,
                   fontWeight: isSelected ? '700' : '500',
                 },
               ]}
@@ -117,10 +156,10 @@ export function SearchFilterPills({
 
 const styles = StyleSheet.create({
   container: {
-    paddingHorizontal: 4,
-    paddingVertical: 8,
+    paddingVertical: 12,
     gap: 8,
     flexDirection: 'row',
+    alignItems: 'center',
   },
   pill: {
     minHeight: MIN_TOUCH_SIZE,
@@ -130,8 +169,20 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+  },
+  themePill: {
+    paddingHorizontal: 14,
+  },
+  pillIcon: {
+    marginRight: 5,
   },
   pillText: {
-    fontSize: 14,
+    fontSize: 13,
+  },
+  divider: {
+    width: 1,
+    height: 24,
+    marginHorizontal: 4,
   },
 });

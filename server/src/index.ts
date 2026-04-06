@@ -2,8 +2,10 @@ import express from 'express';
 import { config } from './config/env';
 import { corsMiddleware } from './middleware/cors';
 import { requestLogger } from './middleware/logger';
+import { activityLogger } from './middleware/activity-logger';
 import { errorHandler } from './middleware/error-handler';
 import { aiBibleRouter } from './routes/ai-bible';
+import { adminRouter } from './routes/admin';
 
 const app = express();
 
@@ -11,6 +13,7 @@ const app = express();
 app.use(corsMiddleware);
 app.use(express.json());
 app.use(requestLogger);
+app.use(activityLogger);
 
 // Health check
 app.get('/api/health', (_req, res) => {
@@ -20,6 +23,7 @@ app.get('/api/health', (_req, res) => {
 // Routes
 app.use('/api/ai-bible', aiBibleRouter);
 app.use('/api/bible', aiBibleRouter);
+app.use('/api/admin', adminRouter);
 
 // Error handler (must be last)
 app.use(errorHandler);

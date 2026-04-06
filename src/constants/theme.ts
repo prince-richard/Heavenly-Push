@@ -3,51 +3,70 @@ export interface ThemeColors {
   text: string;
   textSecondary: string;
   accent: string;
+  accentLight: string;
+  accentDark: string;
   link: string;
   error: string;
   success: string;
   border: string;
   card: string;
+  cardElevated: string;
   tabBar: string;
   tabBarActive: string;
   tabBarInactive: string;
   inputBackground: string;
   placeholder: string;
+  gradientStart: string;
+  gradientEnd: string;
 }
 
-export const darkHighContrast: ThemeColors = {
-  background: '#000000',
-  text: '#FFFFFF',
-  textSecondary: '#E0E0E0',
-  accent: '#FFD700',
-  link: '#00BFFF',
-  error: '#FF6B6B',
-  success: '#00FF7F',
-  border: '#FFFFFF',
-  card: '#1A1A1A',
-  tabBar: '#0A0A0A',
-  tabBarActive: '#FFD700',
-  tabBarInactive: '#888888',
-  inputBackground: '#1A1A1A',
-  placeholder: '#888888',
+export const darkPurple: ThemeColors = {
+  background: '#0F0A1F',
+  text: '#F0EDFF',
+  textSecondary: '#B8B0D6',
+  accent: '#A78BFA',
+  accentLight: '#C4B5FD',
+  accentDark: '#7C3AED',
+  link: '#C4B5FD',
+  error: '#F87171',
+  success: '#4ADE80',
+  border: '#2D2550',
+  card: '#1A1333',
+  cardElevated: '#241C42',
+  tabBar: '#0F0A1F',
+  tabBarActive: '#A78BFA',
+  tabBarInactive: '#6B5F8A',
+  inputBackground: '#1A1333',
+  placeholder: '#6B5F8A',
+  gradientStart: '#7C3AED',
+  gradientEnd: '#A78BFA',
 };
 
-export const lightHighContrast: ThemeColors = {
-  background: '#FFFFFF',
-  text: '#000000',
-  textSecondary: '#333333',
-  accent: '#B8860B',
-  link: '#0000EE',
-  error: '#CC0000',
-  success: '#006400',
-  border: '#000000',
-  card: '#F5F5F5',
+export const lightPurple: ThemeColors = {
+  background: '#FAF8FF',
+  text: '#1A1030',
+  textSecondary: '#5B5278',
+  accent: '#7C3AED',
+  accentLight: '#EDE9FE',
+  accentDark: '#5B21B6',
+  link: '#6D28D9',
+  error: '#DC2626',
+  success: '#16A34A',
+  border: '#E4DCF5',
+  card: '#F3EEFF',
+  cardElevated: '#FFFFFF',
   tabBar: '#FFFFFF',
-  tabBarActive: '#1E40AF',
-  tabBarInactive: '#666666',
-  inputBackground: '#F0F0F0',
-  placeholder: '#666666',
+  tabBarActive: '#7C3AED',
+  tabBarInactive: '#9CA3AF',
+  inputBackground: '#F3EEFF',
+  placeholder: '#9CA3AF',
+  gradientStart: '#7C3AED',
+  gradientEnd: '#A78BFA',
 };
+
+// Keep old names as aliases for backward compatibility
+export const darkHighContrast = darkPurple;
+export const lightHighContrast = lightPurple;
 
 export const spacing = {
   xs: 4,
@@ -60,13 +79,22 @@ export const spacing = {
 } as const;
 
 export const fontSizes = {
-  sm: 16,
-  base: 18,
+  sm: 14,
+  base: 16,
+  md: 18,
   lg: 22,
   xl: 26,
   '2xl': 32,
 } as const;
 
-export function getTheme(highContrast: boolean): ThemeColors {
-  return highContrast ? darkHighContrast : lightHighContrast;
+export const borderRadius = {
+  sm: 8,
+  md: 12,
+  lg: 16,
+  xl: 20,
+  full: 9999,
+} as const;
+
+export function getTheme(dark: boolean): ThemeColors {
+  return dark ? darkPurple : lightPurple;
 }

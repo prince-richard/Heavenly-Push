@@ -3,6 +3,7 @@ import { View, TextInput, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '@/hooks/useAccessibility';
+import { useVoiceStore } from '@/stores/useVoiceStore';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import { DEBOUNCE_MS } from '@/constants/config';
 
@@ -23,7 +24,9 @@ export function SearchBar({
 }: SearchBarProps) {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
+  const isListening = useVoiceStore((s) => s.isListening);
   const [localValue, setLocalValue] = useState(value);
+  const [isFocused, setIsFocused] = useState(false);
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Sync external value changes (e.g., from voice transcript)
@@ -43,7 +46,7 @@ export function SearchBar({
         onChangeText(text);
       }, DEBOUNCE_MS);
     },
-    [onChangeText]
+    [onChangeText],
   );
 
   const handleClear = useCallback(() => {
@@ -73,14 +76,14 @@ export function SearchBar({
         styles.container,
         {
           backgroundColor: colors.inputBackground,
-          borderColor: colors.border,
+          borderColor: isFocused ? colors.accent : 'transparent',
         },
       ]}
     >
       <Ionicons
         name="search-outline"
-        size={22}
-        color={colors.placeholder}
+        size={20}
+        color={isFocused ? colors.accent : colors.placeholder}
         style={styles.searchIcon}
       />
       <TextInput
@@ -88,6 +91,8 @@ export function SearchBar({
         value={localValue}
         onChangeText={handleChangeText}
         onSubmitEditing={handleSubmitEditing}
+        onFocus={() => setIsFocused(true)}
+        onBlur={() => setIsFocused(false)}
         placeholder={t('search.placeholder')}
         placeholderTextColor={colors.placeholder}
         returnKeyType="search"
@@ -104,7 +109,14 @@ export function SearchBar({
           accessibilityLabel="Clear search"
           style={styles.iconButton}
         >
-          <Ionicons name="close-circle" size={22} color={colors.placeholder} />
+          <View
+            style={[
+              styles.clearIconBg,
+              { backgroundColor: colors.placeholder + '30' },
+            ]}
+          >
+            <Ionicons name="close" size={14} color={colors.textSecondary} />
+          </View>
         </Pressable>
       )}
       {showVoiceButton && onVoicePress && (
@@ -115,7 +127,22 @@ export function SearchBar({
           accessibilityHint="Double tap to search by voice"
           style={styles.iconButton}
         >
-          <Ionicons name="mic-outline" size={24} color={colors.accent} />
+          <View
+            style={[
+              styles.micIconBg,
+              {
+                backgroundColor: isListening
+                  ? colors.accent
+                  : colors.accent + '18',
+              },
+            ]}
+          >
+            <Ionicons
+              name={isListening ? 'mic' : 'mic-outline'}
+              size={18}
+              color={isListening ? colors.background : colors.accent}
+            />
+          </View>
         </Pressable>
       )}
     </View>
@@ -127,22 +154,37 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 2,
-    borderRadius: 12,
-    paddingHorizontal: 12,
-    minHeight: MIN_TOUCH_SIZE + 8,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    minHeight: MIN_TOUCH_SIZE + 12,
   },
   searchIcon: {
-    marginRight: 8,
+    marginRight: 10,
   },
   input: {
     flex: 1,
-    fontSize: 18,
-    paddingVertical: 10,
+    fontSize: 16,
+    fontWeight: '400',
+    paddingVertical: 12,
     minHeight: MIN_TOUCH_SIZE,
   },
   iconButton: {
     minWidth: MIN_TOUCH_SIZE,
     minHeight: MIN_TOUCH_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  clearIconBg: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micIconBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     alignItems: 'center',
     justifyContent: 'center',
   },
