@@ -4,6 +4,7 @@ import {
   chatAboutBible,
   searchBibleWithAi,
   getAiDailyVerse,
+  askAnything,
   ExplainError,
 } from '../services/explain-service';
 import { parseReference } from '../utils/reference-parser';
@@ -72,6 +73,30 @@ router.post('/chat', async (req: Request, res: Response) => {
     }
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ai-bible] chat error:', message);
+    res.status(500).json({ error: message, code: 'AI_ERROR' });
+  }
+});
+
+// POST /api/ai-bible/ask  { question, hintedLanguage? }
+// Returns: { answer, verses[], detectedLanguage, providerUsed }
+router.post('/ask', async (req: Request, res: Response) => {
+  try {
+    const { question, hintedLanguage } = req.body;
+    if (!question || typeof question !== 'string') {
+      res.status(400).json({ error: 'Missing required field: question', code: 'MISSING_QUESTION' });
+      return;
+    }
+    const result = await askAnything({
+      question,
+      hintedLanguage:
+        hintedLanguage === 'ta' ? 'ta' : hintedLanguage === 'en' ? 'en' : undefined,
+    });
+    metricsStore.logAiCall(result.providerUsed, question, undefined, false, true);
+    res.json(result);
+  } catch (err) {
+    metricsStore.logAiCall('unknown', req.body?.question ?? '', undefined, false, false);
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[ai-bible] ask error:', message);
     res.status(500).json({ error: message, code: 'AI_ERROR' });
   }
 });

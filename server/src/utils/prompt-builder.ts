@@ -13,6 +13,16 @@ Rules:
 - Respond in JSON format: {"explanation": "...", "shortSummary": "..."}`;
 
 export function buildPrompt(input: AiInput): BuiltPrompt {
+  // Caller can fully override both prompts (used by ask/search/daily,
+  // which aren't grounded to a single verse and need a different system
+  // prompt or the model will refuse).
+  if (input.systemPromptOverride && input.userMessageOverride) {
+    return {
+      systemPrompt: input.systemPromptOverride,
+      userMessage: input.userMessageOverride,
+    };
+  }
+
   const tamilLine = input.tamilVerse
     ? `\nTamil Verse Text: ${input.tamilVerse}`
     : '';
@@ -26,7 +36,7 @@ Preferred Language: ${input.language}
 Respond with a JSON object containing "explanation" and "shortSummary".`;
 
   return {
-    systemPrompt: SYSTEM_PROMPT,
+    systemPrompt: input.systemPromptOverride ?? SYSTEM_PROMPT,
     userMessage,
   };
 }
