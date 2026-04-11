@@ -18,13 +18,13 @@ import { useAccessibility } from '@/hooks/useAccessibility';
 import { useShakeDetector } from '@/hooks/useShakeDetector';
 import { useTTS } from '@/hooks/useTTS';
 import { useVoiceController } from '@/hooks/useVoiceController';
-import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useVoiceStore } from '@/stores/useVoiceStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import {
-  chatWithBible,
+  askAnything,
   getAiDailyVerse,
   type AiDailyVerseResponse,
+  type AskVerse,
 } from '@/services/ai/AiBibleService';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
@@ -50,7 +50,9 @@ export function HomeScreen() {
   const navigation = useNavigation<HomeNav>();
   const { speakText, stop: stopTTS, isSpeaking } = useTTS();
   const { startListening, stopListening, isListening } = useVoiceController();
-  const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
+
+  const recognitionLanguage = useVoiceStore((s) => s.recognitionLanguage);
+  const setRecognitionLanguage = useVoiceStore((s) => s.setRecognitionLanguage);
   const transcript = useVoiceStore((s) => s.transcript);
   const partialTranscript = useVoiceStore((s) => s.partialTranscript);
   const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
@@ -58,17 +60,20 @@ export function HomeScreen() {
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
   const [userQuestion, setUserQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
+  const [aiVerses, setAiVerses] = useState<AskVerse[]>([]);
+  const [answerLanguage, setAnswerLanguage] = useState<'en' | 'ta'>('en');
   const [aiError, setAiError] = useState('');
   const [dailyVerse, setDailyVerse] = useState<AiDailyVerseResponse | null>(null);
   const [dailyLoading, setDailyLoading] = useState(true);
 
   const prevTranscriptRef = useRef('');
 
-  // Load daily verse from AI
+  // Load daily verse from AI — uses the user's currently selected
+  // recognition language so the daily verse matches what they hear.
   useEffect(() => {
     let cancelled = false;
     setDailyLoading(true);
-    getAiDailyVerse(primaryLanguage)
+    getAiDailyVerse(recognitionLanguage)
       .then((res) => {
         if (!cancelled) {
           setDailyVerse(res);
@@ -81,7 +86,7 @@ export function HomeScreen() {
     return () => {
       cancelled = true;
     };
-  }, [primaryLanguage]);
+  }, [recognitionLanguage]);
 
   // Shake navigates to voice activation immediately on Home
   useShakeDetector(() => {
@@ -102,18 +107,17 @@ export function HomeScreen() {
       setAssistantState('processing');
       AccessibilityInfo.announceForAccessibility('Processing your question');
 
-      chatWithBible({
-        question: transcript,
-        preferredLanguage: primaryLanguage,
-      })
+      askAnything(transcript, recognitionLanguage)
         .then((response) => {
           setAiAnswer(response.answer);
+          setAiVerses(response.verses ?? []);
+          setAnswerLanguage(response.detectedLanguage);
           setAssistantState('responded');
-          setLastAiAnswer(response.answer, primaryLanguage);
+          setLastAiAnswer(response.answer, response.detectedLanguage);
           AccessibilityInfo.announceForAccessibility(
             `Here is the answer: ${response.answer.slice(0, 200)}`,
           );
-          void speakText(response.answer, primaryLanguage);
+          void speakText(response.answer, response.detectedLanguage);
         })
         .catch((err: unknown) => {
           const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -122,7 +126,7 @@ export function HomeScreen() {
           AccessibilityInfo.announceForAccessibility('Sorry, an error occurred');
         });
     }
-  }, [transcript, assistantState, primaryLanguage, speakText, setLastAiAnswer]);
+  }, [transcript, assistantState, recognitionLanguage, speakText, setLastAiAnswer]);
 
   // Sync listening state — revert to idle if mic closed with no transcript
   useEffect(() => {
@@ -149,6 +153,7 @@ export function HomeScreen() {
     // New question — reset state
     stopTTS();
     setAiAnswer('');
+    setAiVerses([]);
     setAiError('');
     setUserQuestion('');
     prevTranscriptRef.current = '';
@@ -161,6 +166,7 @@ export function HomeScreen() {
   const handleAskAgain = useCallback(() => {
     stopTTS();
     setAiAnswer('');
+    setAiVerses([]);
     setAiError('');
     setUserQuestion('');
     setAssistantState('idle');
@@ -172,12 +178,12 @@ export function HomeScreen() {
     }
   }, [dailyVerse, navigation]);
 
-  const handleSearchPress = useCallback(() => {
-    (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate(
-      'Main',
-      { screen: 'Search' },
-    );
-  }, [navigation]);
+  const handleVersePress = useCallback(
+    (reference: string) => {
+      navigation.navigate('VerseDetail', { reference });
+    },
+    [navigation],
+  );
 
   const handleFavoritesPress = useCallback(() => {
     (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate(
@@ -190,8 +196,16 @@ export function HomeScreen() {
     stopTTS();
   }, [stopTTS]);
 
+  const handleSetEnglish = useCallback(() => {
+    setRecognitionLanguage('en');
+  }, [setRecognitionLanguage]);
+
+  const handleSetTamil = useCallback(() => {
+    setRecognitionLanguage('ta');
+  }, [setRecognitionLanguage]);
+
   const verseText = dailyVerse
-    ? primaryLanguage === 'ta'
+    ? recognitionLanguage === 'ta'
       ? dailyVerse.tamilText || dailyVerse.englishText
       : dailyVerse.englishText || dailyVerse.tamilText
     : '';
@@ -249,15 +263,76 @@ export function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         {/* Header */}
-        <Text
-          style={[styles.appName, { color: colors.accent }]}
-          accessibilityRole="header"
-        >
-          Heavenly Push
-        </Text>
-        <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-          {getGreeting()}
-        </Text>
+        <View style={styles.headerRow}>
+          <View style={{ flex: 1 }}>
+            <Text
+              style={[styles.appName, { color: colors.accent }]}
+              accessibilityRole="header"
+            >
+              Heavenly Push
+            </Text>
+            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+              {getGreeting()}
+            </Text>
+          </View>
+
+          {/* Language pill — flips recognitionLanguage without
+              touching the user's persistent settings. */}
+          <View
+            style={[styles.langPill, { borderColor: colors.border }]}
+            accessibilityRole="radiogroup"
+            accessibilityLabel="Voice language"
+          >
+            <Pressable
+              onPress={handleSetEnglish}
+              accessibilityRole="radio"
+              accessibilityLabel="Speak and reply in English"
+              accessibilityState={{ selected: recognitionLanguage === 'en' }}
+              style={[
+                styles.langPillButton,
+                {
+                  backgroundColor:
+                    recognitionLanguage === 'en' ? colors.accent : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.langPillText,
+                  {
+                    color: recognitionLanguage === 'en' ? '#FFFFFF' : colors.text,
+                  },
+                ]}
+              >
+                EN
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={handleSetTamil}
+              accessibilityRole="radio"
+              accessibilityLabel="Speak and reply in Tamil"
+              accessibilityState={{ selected: recognitionLanguage === 'ta' }}
+              style={[
+                styles.langPillButton,
+                {
+                  backgroundColor:
+                    recognitionLanguage === 'ta' ? colors.accent : 'transparent',
+                },
+              ]}
+            >
+              <Text
+                style={[
+                  styles.langPillText,
+                  {
+                    color: recognitionLanguage === 'ta' ? '#FFFFFF' : colors.text,
+                  },
+                ]}
+              >
+                தமிழ்
+              </Text>
+            </Pressable>
+          </View>
+        </View>
 
         {/* HERO — entire card is tappable so visually impaired users
             don't need to aim at the mic button. */}
@@ -422,6 +497,66 @@ export function HomeScreen() {
           </View>
         </Pressable>
 
+        {/* Verse list returned from the AI — only shown after a response */}
+        {assistantState === 'responded' && aiVerses.length > 0 ? (
+          <View style={styles.versesSection}>
+            <Text
+              style={[styles.versesTitle, { color: colors.text }]}
+              accessibilityRole="header"
+            >
+              {t('home.relevantVerses', {
+                defaultValue: 'Relevant verses',
+              })}
+            </Text>
+            {aiVerses.map((v, idx) => {
+              const display =
+                answerLanguage === 'ta'
+                  ? v.tamilText || v.englishText
+                  : v.englishText || v.tamilText;
+              return (
+                <Pressable
+                  key={`${v.reference}-${idx}`}
+                  onPress={() => handleVersePress(v.reference)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${v.reference}. ${display}`}
+                  accessibilityHint="Double tap to open the verse"
+                  style={({ pressed }) => [
+                    styles.verseListCard,
+                    {
+                      backgroundColor: colors.card,
+                      borderColor: colors.border,
+                      opacity: pressed ? 0.85 : 1,
+                    },
+                  ]}
+                >
+                  <Text style={[styles.verseReference, { color: colors.accent }]}>
+                    {v.reference}
+                  </Text>
+                  {display ? (
+                    <Text
+                      style={[styles.verseText, { color: colors.text }]}
+                      numberOfLines={3}
+                    >
+                      {display}
+                    </Text>
+                  ) : null}
+                  {v.snippet ? (
+                    <Text
+                      style={[
+                        styles.verseSnippet,
+                        { color: colors.textSecondary },
+                      ]}
+                      numberOfLines={2}
+                    >
+                      {v.snippet}
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
+
         {/* Voice command hints for visually impaired users */}
         {assistantState === 'idle' ? (
           <Text
@@ -430,7 +565,7 @@ export function HomeScreen() {
           >
             {t('home.voiceHints', {
               defaultValue:
-                'Try saying: "Ask what does the Bible say about love", "Open favorites", "Open search", or "Repeat".',
+                'Try saying: "Verses about love", "What does the Bible say about hope", "Open favorites", "Speak in Tamil", or "Repeat".',
             })}
           </Text>
         ) : null}
@@ -481,25 +616,6 @@ export function HomeScreen() {
 
         {/* Quick Actions */}
         <View style={styles.quickActions}>
-          <Pressable
-            onPress={handleSearchPress}
-            accessibilityRole="button"
-            accessibilityLabel="Search the Bible"
-            style={({ pressed }) => [
-              styles.quickActionPill,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Ionicons name="search" size={20} color={colors.accent} />
-            <Text style={[styles.quickActionText, { color: colors.text }]}>
-              {t('home.searchBible', { defaultValue: 'Search Bible' })}
-            </Text>
-          </Pressable>
-
           <Pressable
             onPress={handleFavoritesPress}
             accessibilityRole="button"
@@ -557,6 +673,13 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 32,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+    gap: 12,
+  },
   appName: {
     fontSize: 28,
     fontWeight: '700',
@@ -565,7 +688,25 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 18,
     fontWeight: '400',
-    marginBottom: 20,
+  },
+  langPill: {
+    flexDirection: 'row',
+    borderWidth: 1,
+    borderRadius: 999,
+    overflow: 'hidden',
+    marginTop: 4,
+  },
+  langPillButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    minWidth: 48,
+    minHeight: MIN_TOUCH_SIZE,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  langPillText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
   heroCard: {
     borderRadius: 24,
@@ -659,6 +800,27 @@ const styles = StyleSheet.create({
     fontSize: 15,
     textAlign: 'center',
     lineHeight: 22,
+  },
+  versesSection: {
+    marginBottom: 24,
+  },
+  versesTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 10,
+  },
+  verseListCard: {
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    marginBottom: 10,
+    minHeight: MIN_TOUCH_SIZE,
+  },
+  verseSnippet: {
+    fontSize: 13,
+    lineHeight: 18,
+    marginTop: 6,
+    fontStyle: 'italic',
   },
   voiceHints: {
     fontSize: 13,

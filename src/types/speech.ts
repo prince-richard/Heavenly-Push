@@ -30,7 +30,9 @@ export type VoiceCommand =
   | 'openSettings'
   | 'dailyVerse'
   | 'searchInTamil'
-  | 'searchInEnglish';
+  | 'searchInEnglish'
+  | 'speakEnglish'
+  | 'speakTamil';
 
 export interface ParsedVoiceCommand {
   command: VoiceCommand;

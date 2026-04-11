@@ -8,7 +8,7 @@ import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useSearchStore } from '@/stores/useSearchStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
 import { navigateToTab } from '@/app/navigation/navigationRef';
-import { chatWithBible } from '@/services/ai/AiBibleService';
+import { askAnything } from '@/services/ai/AiBibleService';
 import {
   TTS_SPEED_STEP,
   MIN_TTS_SPEED,
@@ -27,10 +27,12 @@ export function useVoiceController() {
   const isListening = useVoiceStore((s) => s.isListening);
   const transcript = useVoiceStore((s) => s.transcript);
   const error = useVoiceStore((s) => s.error);
+  const recognitionLanguage = useVoiceStore((s) => s.recognitionLanguage);
   const setListening = useVoiceStore((s) => s.setListening);
   const setTranscript = useVoiceStore((s) => s.setTranscript);
   const setPartialTranscript = useVoiceStore((s) => s.setPartialTranscript);
   const setError = useVoiceStore((s) => s.setError);
+  const setRecognitionLanguage = useVoiceStore((s) => s.setRecognitionLanguage);
 
   // Settings
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
@@ -45,11 +47,24 @@ export function useVoiceController() {
   const setSpeakingStatus = usePlaybackStore((s) => s.setSpeakingStatus);
   const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
 
-  // Keep fresh refs so the final-transcript handler doesn't use stale closures.
-  const primaryLanguageRef = useRef(primaryLanguage);
+  // Sync recognitionLanguage to the user's primary language on first
+  // mount and whenever the user changes their primary language in
+  // Settings — but only if the user hasn't manually flipped it via the
+  // Home pill since (we treat any explicit pill flip as the source of
+  // truth until the next settings change).
+  const lastPrimaryLanguageRef = useRef(primaryLanguage);
   useEffect(() => {
-    primaryLanguageRef.current = primaryLanguage;
-  }, [primaryLanguage]);
+    if (lastPrimaryLanguageRef.current !== primaryLanguage) {
+      lastPrimaryLanguageRef.current = primaryLanguage;
+      setRecognitionLanguage(primaryLanguage);
+    }
+  }, [primaryLanguage, setRecognitionLanguage]);
+
+  // Keep fresh refs so the final-transcript handler doesn't use stale closures.
+  const recognitionLanguageRef = useRef(recognitionLanguage);
+  useEffect(() => {
+    recognitionLanguageRef.current = recognitionLanguage;
+  }, [recognitionLanguage]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -74,28 +89,31 @@ export function useVoiceController() {
       const parsed = voiceCommandParser.parse(text);
 
       if (!parsed) {
-        // No command matched — treat as search query
+        // No command matched — let HomeScreen pick it up via the
+        // transcript store and ask the AI directly. Search store is
+        // still updated for back-compat.
         setQuery(text);
         return;
       }
 
       switch (parsed.command) {
         case 'search':
+          // Search is now part of the home assistant — route through ask.
           if (parsed.args) {
             setQuery(parsed.args);
-            navigateToTab('Search');
+            navigateToTab('Home');
           }
           break;
 
         case 'ask': {
           // Global "ask the AI" command — works from any screen.
           if (!parsed.args) break;
-          const lang = primaryLanguageRef.current;
+          const lang = recognitionLanguageRef.current;
           void ttsService.stop();
-          chatWithBible({ question: parsed.args, preferredLanguage: lang })
+          askAnything(parsed.args, lang)
             .then((res) => {
-              setLastAiAnswer(res.answer, lang);
-              void ttsService.speak(res.answer, lang);
+              setLastAiAnswer(res.answer, res.detectedLanguage);
+              void ttsService.speak(res.answer, res.detectedLanguage);
             })
             .catch(() => {
               void ttsService.speak(
@@ -115,7 +133,7 @@ export function useVoiceController() {
           // Replay the last AI answer, regardless of which screen.
           const state = usePlaybackStore.getState();
           const answer = state.lastAiAnswer;
-          const lang = state.lastAiLanguage ?? primaryLanguageRef.current;
+          const lang = state.lastAiLanguage ?? recognitionLanguageRef.current;
           if (answer) {
             void ttsService.speak(answer, lang);
           }
@@ -134,12 +152,20 @@ export function useVoiceController() {
           break;
         }
 
-        case 'openHome':
-          navigateToTab('Home');
+        case 'speakEnglish':
+          setRecognitionLanguage('en');
+          recognitionLanguageRef.current = 'en';
           break;
 
+        case 'speakTamil':
+          setRecognitionLanguage('ta');
+          recognitionLanguageRef.current = 'ta';
+          break;
+
+        case 'openHome':
         case 'openSearch':
-          navigateToTab('Search');
+          // Search no longer has its own tab; both go home.
+          navigateToTab('Home');
           break;
 
         case 'openFavorites':
@@ -173,6 +199,7 @@ export function useVoiceController() {
       setQuery,
       setSpeakingStatus,
       setLastAiAnswer,
+      setRecognitionLanguage,
       ttsSpeed,
       setTtsSpeed,
     ],
@@ -234,8 +261,9 @@ export function useVoiceController() {
         }),
       );
 
-      // Map language to recognition locale
-      const locale = primaryLanguage === 'ta' ? 'ta-IN' : 'en-US';
+      // Map language to recognition locale — read from voice store so
+      // the Home pill controls it without mutating user settings.
+      const locale = recognitionLanguage === 'ta' ? 'ta-IN' : 'en-US';
       await speechService.startListening(locale);
 
       setListening(true);
@@ -251,7 +279,7 @@ export function useVoiceController() {
       setListening(false);
     }
   }, [
-    primaryLanguage,
+    recognitionLanguage,
     hapticsEnabled,
     setSpeakingStatus,
     setError,

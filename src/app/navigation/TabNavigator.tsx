@@ -5,7 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import type { TabParamList } from '@/types/navigation';
 import { HomeScreen } from '@/app/screens/HomeScreen';
-import { SearchScreen } from '@/app/screens/SearchScreen';
 import { FavoritesScreen } from '@/app/screens/FavoritesScreen';
 import { PlansScreen } from '@/app/screens/PlansScreen';
 import { SettingsScreen } from '@/app/screens/SettingsScreen';
@@ -53,21 +52,6 @@ export function TabNavigator() {
           tabBarIcon: ({ color, focused }) => (
             <Ionicons
               name={focused ? 'home' : 'home-outline'}
-              size={TAB_ICON_SIZE}
-              color={color}
-            />
-          ),
-        }}
-      />
-      <Tab.Screen
-        name="Search"
-        component={SearchScreen}
-        options={{
-          tabBarLabel: t('tabs.search'),
-          tabBarAccessibilityLabel: t('accessibility.tabSearch'),
-          tabBarIcon: ({ color, focused }) => (
-            <Ionicons
-              name={focused ? 'search' : 'search-outline'}
               size={TAB_ICON_SIZE}
               color={color}
             />

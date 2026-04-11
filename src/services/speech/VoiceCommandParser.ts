@@ -26,11 +26,37 @@ const COMMAND_PATTERNS: CommandPattern[] = [
     hasArgs: true,
   },
 
-  // Search commands (with args)
+  // Search commands (with args) — treated like "ask" since search now
+  // lives inside the home assistant.
   {
     prefixes: ['search for ', 'search '],
     command: 'search',
     hasArgs: true,
+  },
+
+  // Switch the recognition language (no args)
+  {
+    prefixes: [
+      'speak in english',
+      'switch to english',
+      'english please',
+      'use english',
+      'ஆங்கிலம்',
+    ],
+    command: 'speakEnglish',
+    hasArgs: false,
+  },
+  {
+    prefixes: [
+      'speak in tamil',
+      'switch to tamil',
+      'tamil please',
+      'use tamil',
+      'தமிழில் பேசு',
+      'தமிழ்',
+    ],
+    command: 'speakTamil',
+    hasArgs: false,
   },
 
   // Navigation — go to a tab
@@ -52,7 +78,9 @@ const COMMAND_PATTERNS: CommandPattern[] = [
       'show search',
       'தேடல்',
     ],
-    command: 'openSearch',
+    // Search no longer has its own screen — route the user back home,
+    // where the assistant lives.
+    command: 'openHome',
     hasArgs: false,
   },
   {

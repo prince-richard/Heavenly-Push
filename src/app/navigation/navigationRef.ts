@@ -9,7 +9,7 @@ import type { RootStackParamList } from '@/types/navigation';
  */
 export const navigationRef = createNavigationContainerRef<RootStackParamList>();
 
-type TabName = 'Home' | 'Search' | 'Favorites' | 'Plans' | 'Settings';
+type TabName = 'Home' | 'Favorites' | 'Plans' | 'Settings';
 
 export function navigateToTab(tab: TabName): void {
   if (!navigationRef.isReady()) return;

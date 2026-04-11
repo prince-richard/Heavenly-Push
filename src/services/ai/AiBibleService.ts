@@ -58,6 +58,20 @@ export interface AiDailyVerseResponse {
   providerUsed: string;
 }
 
+export interface AskVerse {
+  reference: string;
+  englishText: string;
+  tamilText: string;
+  snippet: string;
+}
+
+export interface AskResponse {
+  answer: string;
+  verses: AskVerse[];
+  detectedLanguage: 'en' | 'ta';
+  providerUsed: string;
+}
+
 export interface ParallelVerseResponse {
   reference: string;
   english: { reference: string; text: string; version: string; found: boolean };
@@ -76,6 +90,22 @@ export async function chatWithBible(request: ChatRequest): Promise<ChatResponse>
     throw new Error(error.error || `Request failed: ${res.status}`);
   }
 
+  return res.json();
+}
+
+export async function askAnything(
+  question: string,
+  hintedLanguage?: 'en' | 'ta',
+): Promise<AskResponse> {
+  const res = await fetch(`${API_BASE}/api/ai-bible/ask`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ question, hintedLanguage }),
+  });
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: 'Unknown error', code: 'UNKNOWN' }));
+    throw new Error(error.error || `Request failed: ${res.status}`);
+  }
   return res.json();
 }
 

@@ -6,6 +6,14 @@ interface VoiceState {
   partialTranscript: string;
   error: string | null;
   voiceMode: boolean;
+  /**
+   * Language used for the next speech-recognition session.
+   * Ephemeral — does not persist or mutate user settings.
+   * Defaults to user's primary language but can be flipped from the
+   * Home screen pill so users can ask in either language without
+   * digging into Settings.
+   */
+  recognitionLanguage: 'en' | 'ta';
 }
 
 interface VoiceActions {
@@ -14,6 +22,7 @@ interface VoiceActions {
   setPartialTranscript: (partialTranscript: string) => void;
   setError: (error: string | null) => void;
   setVoiceMode: (voiceMode: boolean) => void;
+  setRecognitionLanguage: (language: 'en' | 'ta') => void;
   reset: () => void;
 }
 
@@ -25,6 +34,7 @@ const initialState: VoiceState = {
   partialTranscript: '',
   error: null,
   voiceMode: false,
+  recognitionLanguage: 'en',
 };
 
 export const useVoiceStore = create<VoiceStore>()((set) => ({
@@ -35,5 +45,11 @@ export const useVoiceStore = create<VoiceStore>()((set) => ({
   setPartialTranscript: (partialTranscript) => set({ partialTranscript }),
   setError: (error) => set({ error }),
   setVoiceMode: (voiceMode) => set({ voiceMode }),
-  reset: () => set(initialState),
+  setRecognitionLanguage: (recognitionLanguage) => set({ recognitionLanguage }),
+  reset: () =>
+    set((state) => ({
+      ...initialState,
+      // Keep the user's recognition language pick across resets.
+      recognitionLanguage: state.recognitionLanguage,
+    })),
 }));
