@@ -6,6 +6,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import '@/i18n';
 import { RootNavigator } from '@/app/navigation/RootNavigator';
 import { linking } from '@/app/navigation/linking';
+import { navigationRef } from '@/app/navigation/navigationRef';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { DatabaseProvider } from '@/contexts/DatabaseContext';
@@ -27,7 +28,7 @@ export default function App() {
   return (
     <SafeAreaProvider>
       <DatabaseProvider>
-        <NavigationContainer linking={linking}>
+        <NavigationContainer ref={navigationRef} linking={linking}>
           <RootNavigator />
           <StatusBar style={highContrastMode ? 'light' : 'dark'} />
         </NavigationContainer>

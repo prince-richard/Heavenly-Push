@@ -5,6 +5,8 @@ import {
   StyleSheet,
   AccessibilityInfo,
   Platform,
+  FlatList,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -18,63 +20,89 @@ import { useSearchStore } from '@/stores/useSearchStore';
 import { useVoiceStore } from '@/stores/useVoiceStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { SearchBar } from '@/components/search/SearchBar';
-import { SearchFilterPills } from '@/components/search/SearchFilterPills';
-import { ResultList } from '@/components/search/ResultList';
 import { EmptyState } from '@/components/common/EmptyState';
 import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList, TabParamList } from '@/types/navigation';
-import type { BibleVerse, SupportedLanguage } from '@/types/models';
-import { useDatabase } from '@/contexts/DatabaseContext';
-import { SearchEngine } from '@/services/search/SearchEngine';
-import { SearchHistoryRepository } from '@/db/repositories/SearchHistoryRepository';
+import { aiSearch, type AiSearchHit } from '@/services/ai/AiBibleService';
 
 type SearchNav = NativeStackNavigationProp<RootStackParamList>;
 type SearchRoute = RouteProp<TabParamList, 'Search'>;
-
-type LanguageFilter = 'all' | 'en' | 'ta';
 
 export function SearchScreen() {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
   const navigation = useNavigation<SearchNav>();
   const route = useRoute<SearchRoute>();
-  const db = useDatabase();
   const { startListening, stopListening, isListening } = useVoiceController();
   const { speakText } = useTTS();
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
 
   const query = useSearchStore((s) => s.query);
   const setQuery = useSearchStore((s) => s.setQuery);
-  const results = useSearchStore((s) => s.results);
-  const setResults = useSearchStore((s) => s.setResults);
-  const loading = useSearchStore((s) => s.loading);
-  const setLoading = useSearchStore((s) => s.setLoading);
-  const setRecentHistory = useSearchStore((s) => s.setRecentHistory);
 
   const transcript = useVoiceStore((s) => s.transcript);
 
-  const [languageFilter, setLanguageFilter] = useState<LanguageFilter>('all');
-  const [selectedThemes, setSelectedThemes] = useState<string[]>([]);
+  const [hits, setHits] = useState<AiSearchHit[]>([]);
+  const [loading, setLoading] = useState(false);
   const [hasSearched, setHasSearched] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const lastTranscriptRef = useRef('');
 
-  // Handle route params (query passed from other screens)
+  const performSearch = useCallback(
+    async (searchQuery: string) => {
+      const trimmed = searchQuery.trim();
+      if (!trimmed) {
+        setHits([]);
+        setHasSearched(false);
+        setErrorMsg(null);
+        return;
+      }
+
+      setLoading(true);
+      setHasSearched(true);
+      setErrorMsg(null);
+      try {
+        const result = await aiSearch(trimmed, primaryLanguage, 8);
+        setHits(result.hits);
+
+        if (result.hits.length > 0) {
+          AccessibilityInfo.announceForAccessibility(
+            t('search.resultsCount', { count: result.hits.length }),
+          );
+        } else {
+          AccessibilityInfo.announceForAccessibility(t('search.noResults'));
+          void speakText(t('search.noResults'), primaryLanguage);
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : 'Search failed';
+        setErrorMsg(msg);
+        setHits([]);
+        AccessibilityInfo.announceForAccessibility('Search failed');
+      } finally {
+        setLoading(false);
+      }
+    },
+    [primaryLanguage, t, speakText],
+  );
+
+  // Handle route param query
   useEffect(() => {
     if (route.params?.query) {
       setQuery(route.params.query);
       void performSearch(route.params.query);
     }
-  }, [route.params?.query]);
+  }, [route.params?.query, setQuery, performSearch]);
 
-  // Auto-activate voice when navigated with voiceActivated=true
+  // Auto-activate voice
   useEffect(() => {
     if (route.params?.voiceActivated && !isListening) {
       const timer = setTimeout(() => {
-        startListening();
+        void startListening();
       }, 300);
       return () => clearTimeout(timer);
     }
-  }, [route.params?.voiceActivated]);
+  }, [route.params?.voiceActivated, isListening, startListening]);
 
   // Auto-populate from voice transcript
   useEffect(() => {
@@ -83,68 +111,7 @@ export function SearchScreen() {
       setQuery(transcript);
       void performSearch(transcript);
     }
-  }, [transcript]);
-
-  const performSearch = useCallback(
-    async (searchQuery: string) => {
-      const trimmed = searchQuery.trim();
-      if (!trimmed) {
-        setResults([]);
-        setHasSearched(false);
-        return;
-      }
-
-      setLoading(true);
-      setHasSearched(true);
-      try {
-        const engine = new SearchEngine(db);
-        const langOption: SupportedLanguage | 'auto' =
-          languageFilter === 'all' ? 'auto' : languageFilter;
-
-        const searchResults = await engine.search(trimmed, {
-          language: langOption,
-          themes: selectedThemes.length > 0 ? selectedThemes : undefined,
-        });
-
-        setResults(searchResults);
-
-        // Announce result count for screen readers
-        if (searchResults.length > 0) {
-          AccessibilityInfo.announceForAccessibility(
-            t('search.resultsCount', { count: searchResults.length }),
-          );
-        } else {
-          AccessibilityInfo.announceForAccessibility(t('search.noResults'));
-          // Speak "no results" for voice-first users
-          void speakText(t('search.noResults'), primaryLanguage);
-        }
-
-        // Save to search history
-        const historyRepo = new SearchHistoryRepository(db);
-        await historyRepo.add(trimmed, langOption);
-
-        // Refresh recent history in store
-        const recent = await historyRepo.getRecent(10);
-        setRecentHistory(recent);
-      } catch (error) {
-        console.error('Search error:', error);
-        setResults([]);
-      } finally {
-        setLoading(false);
-      }
-    },
-    [
-      db,
-      languageFilter,
-      selectedThemes,
-      primaryLanguage,
-      t,
-      setResults,
-      setLoading,
-      setRecentHistory,
-      speakText,
-    ],
-  );
+  }, [transcript, setQuery, performSearch]);
 
   const handleChangeText = useCallback(
     (text: string) => {
@@ -152,46 +119,73 @@ export function SearchScreen() {
       if (text.trim()) {
         void performSearch(text);
       } else {
-        setResults([]);
+        setHits([]);
         setHasSearched(false);
       }
     },
-    [setQuery, performSearch, setResults],
+    [setQuery, performSearch],
   );
 
   const handleVoicePress = useCallback(() => {
     if (isListening) {
-      stopListening();
+      void stopListening();
     } else {
-      startListening();
+      void startListening();
     }
   }, [isListening, startListening, stopListening]);
 
-  const handleVersePress = useCallback(
-    (verse: BibleVerse) => {
-      navigation.navigate('VerseDetail', { verseId: verse.id });
+  const handleHitPress = useCallback(
+    (hit: AiSearchHit) => {
+      navigation.navigate('VerseDetail', { reference: hit.reference });
     },
     [navigation],
   );
 
-  const handleLanguageChange = useCallback((lang: LanguageFilter) => {
-    setLanguageFilter(lang);
-  }, []);
-
-  const handleThemeToggle = useCallback((theme: string) => {
-    setSelectedThemes((prev) =>
-      prev.includes(theme)
-        ? prev.filter((t) => t !== theme)
-        : [...prev, theme],
-    );
-  }, []);
-
-  // Re-search when filters change
-  useEffect(() => {
-    if (query.trim()) {
-      void performSearch(query);
-    }
-  }, [languageFilter, selectedThemes]);
+  const renderHit = useCallback(
+    ({ item }: { item: AiSearchHit }) => {
+      const text =
+        primaryLanguage === 'ta'
+          ? item.tamilText || item.englishText
+          : item.englishText || item.tamilText;
+      return (
+        <Pressable
+          onPress={() => handleHitPress(item)}
+          accessibilityRole="button"
+          accessibilityLabel={`${item.reference}. ${text}`}
+          accessibilityHint="Double tap to open this verse"
+          style={({ pressed }) => [
+            styles.hitCard,
+            {
+              backgroundColor: colors.card,
+              borderColor: colors.border,
+              opacity: pressed ? 0.85 : 1,
+            },
+          ]}
+        >
+          <Text style={[styles.hitReference, { color: colors.accent }]}>
+            {item.reference}
+          </Text>
+          {text ? (
+            <Text
+              style={[styles.hitText, { color: colors.text }]}
+              numberOfLines={4}
+            >
+              {text}
+            </Text>
+          ) : null}
+          {item.snippet ? (
+            <Text
+              style={[styles.hitSnippet, { color: colors.textSecondary }]}
+              numberOfLines={2}
+            >
+              {item.snippet}
+            </Text>
+          ) : null}
+        </Pressable>
+      );
+    },
+    [colors, primaryLanguage, handleHitPress],
+  );
 
   return (
     <SafeAreaView
@@ -199,7 +193,6 @@ export function SearchScreen() {
       edges={['top']}
     >
       <View style={styles.container}>
-        {/* Header */}
         <Text
           style={[styles.title, { color: colors.accent }]}
           accessibilityRole="header"
@@ -210,7 +203,6 @@ export function SearchScreen() {
           {t('search.placeholder')}
         </Text>
 
-        {/* Search Input Card */}
         <View
           style={[
             styles.searchCard,
@@ -238,26 +230,29 @@ export function SearchScreen() {
           />
         </View>
 
-        {/* Filter Pills */}
-        <SearchFilterPills
-          selectedLanguage={languageFilter}
-          selectedThemes={selectedThemes}
-          onLanguageChange={handleLanguageChange}
-          onThemeToggle={handleThemeToggle}
-        />
-
-        {/* Results */}
         {loading ? (
           <LoadingSpinner size="large" />
-        ) : results.length > 0 ? (
-          <ResultList results={results} onVersePress={handleVersePress} />
+        ) : errorMsg ? (
+          <EmptyState
+            icon="alert-circle-outline"
+            title={t('search.searchFailed', { defaultValue: 'Search failed' })}
+            subtitle={errorMsg}
+          />
+        ) : hits.length > 0 ? (
+          <FlatList
+            data={hits}
+            keyExtractor={(item, i) => `${item.reference}-${i}`}
+            renderItem={renderHit}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          />
         ) : hasSearched && query.trim() ? (
           <EmptyState
             icon="book-outline"
             title={t('search.noResults')}
             subtitle={t('search.noResultsHint')}
           />
-        ) : !hasSearched ? (
+        ) : (
           <View style={styles.promptContainer}>
             <View
               style={[
@@ -273,10 +268,11 @@ export function SearchScreen() {
             <Text
               style={[styles.promptHint, { color: colors.textSecondary }]}
             >
-              Try a verse reference like "John 3:16" or a topic like "love"
+              Ask anything — a reference like "John 3:16", a topic like "hope",
+              or a question like "what does the Bible say about forgiveness?"
             </Text>
           </View>
-        ) : null}
+        )}
       </View>
     </SafeAreaView>
   );
@@ -302,6 +298,33 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 1,
     overflow: 'hidden',
+    marginBottom: 16,
+  },
+  listContent: {
+    paddingBottom: 24,
+  },
+  hitCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    marginBottom: 12,
+    minHeight: MIN_TOUCH_SIZE,
+  },
+  hitReference: {
+    fontSize: 15,
+    fontWeight: '700',
+    marginBottom: 6,
+  },
+  hitText: {
+    fontSize: 16,
+    lineHeight: 24,
+    fontWeight: '400',
+    marginBottom: 6,
+  },
+  hitSnippet: {
+    fontSize: 13,
+    fontStyle: 'italic',
+    lineHeight: 18,
   },
   promptContainer: {
     flex: 1,

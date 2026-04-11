@@ -13,6 +13,7 @@ export type SpeakingStatus = 'idle' | 'speaking' | 'paused';
 
 export type VoiceCommand =
   | 'search'
+  | 'ask'
   | 'read'
   | 'readContext'
   | 'bookmark'
@@ -24,6 +25,9 @@ export type VoiceCommand =
   | 'recordReflection'
   | 'startMemorization'
   | 'openFavorites'
+  | 'openHome'
+  | 'openSearch'
+  | 'openSettings'
   | 'dailyVerse'
   | 'searchInTamil'
   | 'searchInEnglish';

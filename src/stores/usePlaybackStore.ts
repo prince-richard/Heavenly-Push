@@ -7,6 +7,10 @@ interface PlaybackState {
   speakingStatus: SpeakingStatus;
   speed: number;
   queue: string[];
+  // Last AI answer (used by "repeat" / "read again" voice commands
+  // so they work across screens).
+  lastAiAnswer: string | null;
+  lastAiLanguage: 'en' | 'ta' | null;
 }
 
 interface PlaybackActions {
@@ -14,6 +18,7 @@ interface PlaybackActions {
   setSpeakingStatus: (status: SpeakingStatus) => void;
   setSpeed: (speed: number) => void;
   setQueue: (queue: string[]) => void;
+  setLastAiAnswer: (answer: string, language: 'en' | 'ta') => void;
   reset: () => void;
 }
 
@@ -24,6 +29,8 @@ const initialState: PlaybackState = {
   speakingStatus: 'idle',
   speed: DEFAULT_TTS_SPEED,
   queue: [],
+  lastAiAnswer: null,
+  lastAiLanguage: null,
 };
 
 export const usePlaybackStore = create<PlaybackStore>()((set) => ({
@@ -33,5 +40,7 @@ export const usePlaybackStore = create<PlaybackStore>()((set) => ({
   setSpeakingStatus: (status) => set({ speakingStatus: status }),
   setSpeed: (speed) => set({ speed }),
   setQueue: (queue) => set({ queue }),
+  setLastAiAnswer: (answer, language) =>
+    set({ lastAiAnswer: answer, lastAiLanguage: language }),
   reset: () => set(initialState),
 }));

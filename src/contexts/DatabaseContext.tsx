@@ -2,10 +2,6 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator } from 'react-native';
 import type { SQLiteDatabase } from 'expo-sqlite';
 import { initializeDatabase } from '@/db/database';
-import { useFavoritesStore } from '@/stores/useFavoritesStore';
-import { useSearchStore } from '@/stores/useSearchStore';
-import { FavoritesRepository } from '@/db/repositories/FavoritesRepository';
-import { SearchHistoryRepository } from '@/db/repositories/SearchHistoryRepository';
 
 interface DatabaseContextValue {
   db: SQLiteDatabase | null;
@@ -51,15 +47,8 @@ export function DatabaseProvider({ children }: DatabaseProviderProps) {
 
         if (cancelled) return;
 
-        // Load favorites from DB into Zustand store
-        const favRepo = new FavoritesRepository(db);
-        const favs = await favRepo.getAll();
-        useFavoritesStore.getState().setFavorites(favs.map((f) => f.verseId));
-
-        // Load recent search history into Zustand store
-        const histRepo = new SearchHistoryRepository(db);
-        const recent = await histRepo.getRecent(10);
-        useSearchStore.getState().setRecentHistory(recent);
+        // Favorites and search history are now persisted to AsyncStorage
+        // directly via Zustand stores — no DB hydration needed.
 
         if (!cancelled) {
           setState({ db, isReady: true, error: null });

@@ -13,11 +13,58 @@ interface CommandPattern {
  */
 
 const COMMAND_PATTERNS: CommandPattern[] = [
+  // Ask the AI (with args) — primary catch-all for questions
+  {
+    prefixes: [
+      'ask ',
+      'tell me ',
+      'what does the bible say about ',
+      'what does the bible say ',
+      'கேள் ',
+    ],
+    command: 'ask',
+    hasArgs: true,
+  },
+
   // Search commands (with args)
   {
     prefixes: ['search for ', 'search '],
     command: 'search',
     hasArgs: true,
+  },
+
+  // Navigation — go to a tab
+  {
+    prefixes: [
+      'go home',
+      'open home',
+      'home screen',
+      'home',
+      'முகப்பு',
+    ],
+    command: 'openHome',
+    hasArgs: false,
+  },
+  {
+    prefixes: [
+      'open search',
+      'go to search',
+      'show search',
+      'தேடல்',
+    ],
+    command: 'openSearch',
+    hasArgs: false,
+  },
+  {
+    prefixes: [
+      'open settings',
+      'go to settings',
+      'show settings',
+      'settings',
+      'அமைப்புகள்',
+    ],
+    command: 'openSettings',
+    hasArgs: false,
   },
   {
     prefixes: ['search in tamil ', 'tamil search '],

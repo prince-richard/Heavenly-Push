@@ -1,5 +1,11 @@
 import { Router, Request, Response } from 'express';
-import { explainVerse, chatAboutBible, ExplainError } from '../services/explain-service';
+import {
+  explainVerse,
+  chatAboutBible,
+  searchBibleWithAi,
+  getAiDailyVerse,
+  ExplainError,
+} from '../services/explain-service';
 import { parseReference } from '../utils/reference-parser';
 import { BollsBibleProvider } from '../providers/bible/bolls-bible-provider';
 import { healthCheckAll } from '../services/ai-fallback-manager';
@@ -66,6 +72,43 @@ router.post('/chat', async (req: Request, res: Response) => {
     }
     const message = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ai-bible] chat error:', message);
+    res.status(500).json({ error: message, code: 'AI_ERROR' });
+  }
+});
+
+// POST /api/ai-bible/search  { query, preferredLanguage, limit? }
+router.post('/search', async (req: Request, res: Response) => {
+  try {
+    const { query, preferredLanguage, limit } = req.body;
+    if (!query || typeof query !== 'string') {
+      res.status(400).json({ error: 'Missing required field: query', code: 'MISSING_QUERY' });
+      return;
+    }
+    const result = await searchBibleWithAi({
+      query,
+      preferredLanguage: preferredLanguage === 'ta' ? 'ta' : 'en',
+      limit: typeof limit === 'number' ? limit : undefined,
+    });
+    metricsStore.logAiCall(result.providerUsed, query, undefined, false, true);
+    res.json(result);
+  } catch (err) {
+    metricsStore.logAiCall('unknown', req.body?.query ?? '', undefined, false, false);
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[ai-bible] search error:', message);
+    res.status(500).json({ error: message, code: 'AI_ERROR' });
+  }
+});
+
+// GET /api/ai-bible/daily?lang=en|ta
+router.get('/daily', async (req: Request, res: Response) => {
+  try {
+    const lang = req.query.lang === 'ta' ? 'ta' : 'en';
+    const result = await getAiDailyVerse(lang);
+    metricsStore.logAiCall(result.providerUsed, 'daily-verse', undefined, false, true);
+    res.json(result);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Internal server error';
+    console.error('[ai-bible] daily error:', message);
     res.status(500).json({ error: message, code: 'AI_ERROR' });
   }
 });

@@ -1,6 +1,6 @@
 export type RootStackParamList = {
   Main: undefined;
-  VerseDetail: { verseId: string; autoPlay?: boolean };
+  VerseDetail: { verseId?: string; reference?: string; autoPlay?: boolean };
   PlanDetail: { planId: string };
 };
 

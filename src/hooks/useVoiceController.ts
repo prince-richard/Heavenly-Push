@@ -7,6 +7,8 @@ import { useVoiceStore } from '@/stores/useVoiceStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useSearchStore } from '@/stores/useSearchStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { navigateToTab } from '@/app/navigation/navigationRef';
+import { chatWithBible } from '@/services/ai/AiBibleService';
 import {
   TTS_SPEED_STEP,
   MIN_TTS_SPEED,
@@ -41,6 +43,13 @@ export function useVoiceController() {
 
   // Playback store
   const setSpeakingStatus = usePlaybackStore((s) => s.setSpeakingStatus);
+  const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
+
+  // Keep fresh refs so the final-transcript handler doesn't use stale closures.
+  const primaryLanguageRef = useRef(primaryLanguage);
+  useEffect(() => {
+    primaryLanguageRef.current = primaryLanguage;
+  }, [primaryLanguage]);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -74,13 +83,44 @@ export function useVoiceController() {
         case 'search':
           if (parsed.args) {
             setQuery(parsed.args);
+            navigateToTab('Search');
           }
           break;
+
+        case 'ask': {
+          // Global "ask the AI" command — works from any screen.
+          if (!parsed.args) break;
+          const lang = primaryLanguageRef.current;
+          void ttsService.stop();
+          chatWithBible({ question: parsed.args, preferredLanguage: lang })
+            .then((res) => {
+              setLastAiAnswer(res.answer, lang);
+              void ttsService.speak(res.answer, lang);
+            })
+            .catch(() => {
+              void ttsService.speak(
+                'Sorry, I could not answer that right now.',
+                lang,
+              );
+            });
+          break;
+        }
 
         case 'stop':
           void ttsService.stop();
           setSpeakingStatus('idle');
           break;
+
+        case 'repeat': {
+          // Replay the last AI answer, regardless of which screen.
+          const state = usePlaybackStore.getState();
+          const answer = state.lastAiAnswer;
+          const lang = state.lastAiLanguage ?? primaryLanguageRef.current;
+          if (answer) {
+            void ttsService.speak(answer, lang);
+          }
+          break;
+        }
 
         case 'slowDown': {
           const newSpeed = Math.max(MIN_TTS_SPEED, ttsSpeed - TTS_SPEED_STEP);
@@ -94,27 +134,48 @@ export function useVoiceController() {
           break;
         }
 
+        case 'openHome':
+          navigateToTab('Home');
+          break;
+
+        case 'openSearch':
+          navigateToTab('Search');
+          break;
+
+        case 'openFavorites':
+          navigateToTab('Favorites');
+          break;
+
+        case 'openSettings':
+          navigateToTab('Settings');
+          break;
+
         // Commands that need screen context to execute:
-        // read, readContext, bookmark, share, repeat, recordReflection,
-        // startMemorization, openFavorites, dailyVerse, searchInTamil, searchInEnglish
-        // These are exposed via the transcript/parsed command for the UI layer to handle.
+        // read, readContext, bookmark, share, recordReflection,
+        // startMemorization, dailyVerse, searchInTamil, searchInEnglish
+        // These remain exposed via the transcript/parsed command for
+        // the UI layer to handle.
         case 'searchInTamil':
         case 'searchInEnglish':
         case 'read':
         case 'readContext':
         case 'bookmark':
         case 'share':
-        case 'repeat':
         case 'recordReflection':
         case 'startMemorization':
-        case 'openFavorites':
         case 'dailyVerse':
-          // Store the transcript so the UI layer can pick it up and act on it.
-          // The UI components will re-parse or check voiceStore for the command.
           break;
       }
     },
-    [setTranscript, setListening, setQuery, setSpeakingStatus, ttsSpeed, setTtsSpeed],
+    [
+      setTranscript,
+      setListening,
+      setQuery,
+      setSpeakingStatus,
+      setLastAiAnswer,
+      ttsSpeed,
+      setTtsSpeed,
+    ],
   );
 
   /**

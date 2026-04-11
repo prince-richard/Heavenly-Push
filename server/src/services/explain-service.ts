@@ -7,6 +7,8 @@ import { config } from '../config/env';
 const bibleProvider = new BollsBibleProvider();
 const cache = new SimpleCache<ExplainResult>(10 * 60 * 1000); // 10 min TTL
 const chatCache = new SimpleCache<ChatResult>(10 * 60 * 1000); // 10 min TTL
+const searchCache = new SimpleCache<SearchResult>(10 * 60 * 1000); // 10 min TTL
+const dailyCache = new SimpleCache<DailyVerseResult>(24 * 60 * 60 * 1000); // 24 hour TTL
 
 export interface ExplainRequest {
   question: string;
@@ -170,6 +172,183 @@ export async function chatAboutBible(request: ChatRequest): Promise<ChatResult> 
 
   chatCache.set(cacheKey, result);
 
+  return result;
+}
+
+// ============================================================================
+// AI-powered semantic search
+// ============================================================================
+
+export interface SearchRequest {
+  query: string;
+  preferredLanguage: 'en' | 'ta';
+  limit?: number;
+}
+
+export interface SearchHit {
+  reference: string;
+  englishText: string;
+  tamilText: string;
+  snippet: string;
+}
+
+export interface SearchResult {
+  hits: SearchHit[];
+  providerUsed: string;
+}
+
+/**
+ * Extracts the first balanced JSON array from a string.
+ * AI providers often wrap JSON in code fences or prose.
+ */
+function extractJsonArray(text: string): string | null {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  const start = candidate.indexOf('[');
+  if (start === -1) return null;
+  let depth = 0;
+  for (let i = start; i < candidate.length; i++) {
+    const ch = candidate[i];
+    if (ch === '[') depth++;
+    else if (ch === ']') {
+      depth--;
+      if (depth === 0) return candidate.slice(start, i + 1);
+    }
+  }
+  return null;
+}
+
+export async function searchBibleWithAi(request: SearchRequest): Promise<SearchResult> {
+  const { query, preferredLanguage } = request;
+  const limit = Math.max(1, Math.min(request.limit ?? 5, 10));
+
+  const cacheKey = `search:${query}:${preferredLanguage}:${limit}`;
+  const cached = searchCache.get(cacheKey);
+  if (cached) return cached;
+
+  const language = preferredLanguage === 'ta' ? 'Tamil' : 'English';
+  const prompt = `You are a Bible search assistant. The user is searching for verses about: "${query}"
+
+Return up to ${limit} of the most relevant Bible verses that match this query (by reference, theme, or keywords).
+
+Respond with ONLY a valid JSON array — no prose, no markdown, no code fences. Each item must have this exact shape:
+[
+  {"reference": "Book Chapter:Verse", "englishText": "KJV or ESV English text", "tamilText": "Tamil text if known, else empty string", "snippet": "Short 1-line reason this verse matches"}
+]
+
+Preferred response language for snippet: ${language}. Keep references in standard English form (e.g. "John 3:16"). Do NOT include any commentary outside the JSON.`;
+
+  const { output } = await generateWithFallback({
+    verseText: 'N/A — search task',
+    reference: 'N/A',
+    question: prompt,
+    language,
+  });
+
+  const raw = output.explanation ?? '';
+  const jsonStr = extractJsonArray(raw);
+  let hits: SearchHit[] = [];
+  if (jsonStr) {
+    try {
+      const parsed = JSON.parse(jsonStr) as Array<Partial<SearchHit>>;
+      hits = parsed
+        .filter((h) => h && typeof h.reference === 'string')
+        .map((h) => ({
+          reference: String(h.reference),
+          englishText: typeof h.englishText === 'string' ? h.englishText : '',
+          tamilText: typeof h.tamilText === 'string' ? h.tamilText : '',
+          snippet: typeof h.snippet === 'string' ? h.snippet : '',
+        }))
+        .slice(0, limit);
+    } catch {
+      hits = [];
+    }
+  }
+
+  const result: SearchResult = { hits, providerUsed: output.provider };
+  searchCache.set(cacheKey, result);
+  return result;
+}
+
+// ============================================================================
+// AI-powered daily verse
+// ============================================================================
+
+export interface DailyVerseResult {
+  reference: string;
+  englishText: string;
+  tamilText: string;
+  providerUsed: string;
+}
+
+function getDailyKey(): string {
+  const d = new Date();
+  return `${d.getUTCFullYear()}-${d.getUTCMonth() + 1}-${d.getUTCDate()}`;
+}
+
+export async function getAiDailyVerse(preferredLanguage: 'en' | 'ta'): Promise<DailyVerseResult> {
+  const dayKey = getDailyKey();
+  const cacheKey = `daily:${dayKey}:${preferredLanguage}`;
+  const cached = dailyCache.get(cacheKey);
+  if (cached) return cached;
+
+  const language = preferredLanguage === 'ta' ? 'Tamil' : 'English';
+  const prompt = `Select one uplifting Bible verse to share as the verse of the day for ${dayKey}. Pick something encouraging — love, hope, faith, peace, courage, or comfort.
+
+Respond with ONLY a JSON object, no prose or code fences:
+{"reference": "Book Chapter:Verse", "englishText": "KJV English text", "tamilText": "Tamil translation if known, else empty"}
+
+Preferred response language: ${language}. Reference must be in standard English form.`;
+
+  const { output } = await generateWithFallback({
+    verseText: 'N/A — daily verse',
+    reference: 'N/A',
+    question: prompt,
+    language,
+  });
+
+  const raw = output.explanation ?? '';
+  // Extract first JSON object
+  let verse: { reference?: string; englishText?: string; tamilText?: string } = {};
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    try {
+      verse = JSON.parse(raw.slice(firstBrace, lastBrace + 1));
+    } catch {
+      verse = {};
+    }
+  }
+
+  // If AI didn't give us English text, try to fetch it via the Bible provider for accuracy.
+  let englishText = typeof verse.englishText === 'string' ? verse.englishText : '';
+  let tamilText = typeof verse.tamilText === 'string' ? verse.tamilText : '';
+  const reference = typeof verse.reference === 'string' ? verse.reference : 'John 3:16';
+
+  if (!englishText || !tamilText) {
+    const parsed = parseReference(reference);
+    if (parsed) {
+      try {
+        const parallel = await bibleProvider.getParallelVerse(
+          parsed,
+          config.englishBibleVersion,
+          config.tamilBibleVersion
+        );
+        if (!englishText && parallel.english.found) englishText = parallel.english.text;
+        if (!tamilText && parallel.tamil.found) tamilText = parallel.tamil.text;
+      } catch {
+        // fall through with what we have
+      }
+    }
+  }
+
+  const result: DailyVerseResult = {
+    reference,
+    englishText,
+    tamilText,
+    providerUsed: output.provider,
+  };
+  dailyCache.set(cacheKey, result);
   return result;
 }
 

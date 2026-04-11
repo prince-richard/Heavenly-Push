@@ -7,6 +7,7 @@ import {
   StyleSheet,
   AccessibilityInfo,
   ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -14,15 +15,17 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
-import { useDailyVerse } from '@/hooks/useDailyVerse';
 import { useShakeDetector } from '@/hooks/useShakeDetector';
 import { useTTS } from '@/hooks/useTTS';
 import { useVoiceController } from '@/hooks/useVoiceController';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useVoiceStore } from '@/stores/useVoiceStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { chatWithBible } from '@/services/ai/AiBibleService';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
+import {
+  chatWithBible,
+  getAiDailyVerse,
+  type AiDailyVerseResponse,
+} from '@/services/ai/AiBibleService';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
@@ -38,30 +41,53 @@ function getGreeting(): string {
   return 'Good evening';
 }
 
+const { width: SCREEN_W } = Dimensions.get('window');
+const MIC_SIZE = Math.min(SCREEN_W * 0.55, 260);
+
 export function HomeScreen() {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
   const navigation = useNavigation<HomeNav>();
-  const { verse, loading: dailyLoading } = useDailyVerse();
   const { speakText, stop: stopTTS, isSpeaking } = useTTS();
   const { startListening, stopListening, isListening } = useVoiceController();
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
   const transcript = useVoiceStore((s) => s.transcript);
   const partialTranscript = useVoiceStore((s) => s.partialTranscript);
-  const speakingStatus = usePlaybackStore((s) => s.speakingStatus);
+  const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
 
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
   const [userQuestion, setUserQuestion] = useState('');
   const [aiAnswer, setAiAnswer] = useState('');
   const [aiError, setAiError] = useState('');
+  const [dailyVerse, setDailyVerse] = useState<AiDailyVerseResponse | null>(null);
+  const [dailyLoading, setDailyLoading] = useState(true);
+
   const prevTranscriptRef = useRef('');
 
-  // Shake navigates to Search tab with voice activated
+  // Load daily verse from AI
+  useEffect(() => {
+    let cancelled = false;
+    setDailyLoading(true);
+    getAiDailyVerse(primaryLanguage)
+      .then((res) => {
+        if (!cancelled) {
+          setDailyVerse(res);
+          setDailyLoading(false);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDailyLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [primaryLanguage]);
+
+  // Shake navigates to voice activation immediately on Home
   useShakeDetector(() => {
-    (navigation as unknown as { navigate: (screen: string, params: object) => void }).navigate('Main', {
-      screen: 'Search',
-      params: { voiceActivated: true },
-    });
+    if (!isListening) {
+      void handleMicPress();
+    }
   });
 
   // When transcript changes and we're in listening state, send to AI
@@ -83,10 +109,10 @@ export function HomeScreen() {
         .then((response) => {
           setAiAnswer(response.answer);
           setAssistantState('responded');
+          setLastAiAnswer(response.answer, primaryLanguage);
           AccessibilityInfo.announceForAccessibility(
-            `Here is the answer: ${response.answer.slice(0, 200)}`
+            `Here is the answer: ${response.answer.slice(0, 200)}`,
           );
-          // Auto-speak the response
           void speakText(response.answer, primaryLanguage);
         })
         .catch((err: unknown) => {
@@ -96,38 +122,38 @@ export function HomeScreen() {
           AccessibilityInfo.announceForAccessibility('Sorry, an error occurred');
         });
     }
-  }, [transcript, assistantState, primaryLanguage, speakText]);
+  }, [transcript, assistantState, primaryLanguage, speakText, setLastAiAnswer]);
 
-  // Sync listening state
+  // Sync listening state — revert to idle if mic closed with no transcript
   useEffect(() => {
     if (!isListening && assistantState === 'listening') {
-      // Voice recognition ended — if we have no transcript yet, go back to idle
       if (!transcript || transcript === prevTranscriptRef.current) {
-        // Small delay to allow final transcript to arrive
         const timer = setTimeout(() => {
-          if (assistantState === 'listening') {
-            setAssistantState('idle');
-          }
+          setAssistantState((curr) => (curr === 'listening' ? 'idle' : curr));
         }, 1500);
         return () => clearTimeout(timer);
       }
     }
   }, [isListening, assistantState, transcript]);
 
+  /**
+   * Single-button toggle: tap to start, tap to stop.
+   * Also exposed as tap-anywhere-on-hero for easier reach.
+   */
   const handleMicPress = useCallback(async () => {
     if (isListening) {
       await stopListening();
       return;
     }
 
-    // Reset state for new question
+    // New question — reset state
     stopTTS();
     setAiAnswer('');
     setAiError('');
     setUserQuestion('');
     prevTranscriptRef.current = '';
     setAssistantState('listening');
-    AccessibilityInfo.announceForAccessibility('Listening');
+    AccessibilityInfo.announceForAccessibility('Listening. Speak now.');
 
     await startListening();
   }, [isListening, startListening, stopListening, stopTTS]);
@@ -141,35 +167,33 @@ export function HomeScreen() {
   }, [stopTTS]);
 
   const handleDailyVersePress = useCallback(() => {
-    if (verse) {
-      navigation.navigate('VerseDetail', { verseId: verse.id });
+    if (dailyVerse?.reference) {
+      navigation.navigate('VerseDetail', { reference: dailyVerse.reference });
     }
-  }, [verse, navigation]);
+  }, [dailyVerse, navigation]);
 
   const handleSearchPress = useCallback(() => {
-    (navigation as unknown as { navigate: (screen: string, params: object) => void }).navigate('Main', {
-      screen: 'Search',
-    });
+    (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate(
+      'Main',
+      { screen: 'Search' },
+    );
   }, [navigation]);
 
   const handleFavoritesPress = useCallback(() => {
-    (navigation as unknown as { navigate: (screen: string, params: object) => void }).navigate('Main', {
-      screen: 'Favorites',
-    });
+    (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate(
+      'Main',
+      { screen: 'Favorites' },
+    );
   }, [navigation]);
 
   const handleStopTTS = useCallback(() => {
     stopTTS();
   }, [stopTTS]);
 
-  const verseText = verse
+  const verseText = dailyVerse
     ? primaryLanguage === 'ta'
-      ? verse.textTa ?? verse.textEn ?? ''
-      : verse.textEn ?? verse.textTa ?? ''
-    : '';
-
-  const verseReference = verse
-    ? `${primaryLanguage === 'ta' ? verse.bookNameTa : verse.bookNameEn} ${verse.chapter}:${verse.verse}`
+      ? dailyVerse.tamilText || dailyVerse.englishText
+      : dailyVerse.englishText || dailyVerse.tamilText
     : '';
 
   const displayTranscript =
@@ -177,23 +201,42 @@ export function HomeScreen() {
       ? partialTranscript || transcript || ''
       : userQuestion;
 
-  const micIconName: keyof typeof Ionicons.glyphMap =
-    assistantState === 'listening' ? 'mic' : 'mic-outline';
+  const heroLabel = (() => {
+    switch (assistantState) {
+      case 'idle':
+        return t('home.tapAnywhereToAsk', {
+          defaultValue: 'Tap anywhere to ask the Bible. Double tap to start listening.',
+        });
+      case 'listening':
+        return t('home.listeningTapToStop', {
+          defaultValue: 'Listening. Double tap to stop.',
+        });
+      case 'processing':
+        return t('home.thinking', { defaultValue: 'Thinking. Please wait.' });
+      case 'responded':
+        return t('home.tapToAskAnother', {
+          defaultValue: 'Tap to ask another question.',
+        });
+      case 'error':
+        return t('home.tapToTryAgain', { defaultValue: 'Tap to try again.' });
+    }
+  })();
 
   const statusText = (() => {
     switch (assistantState) {
       case 'idle':
-        return t('home.askBible', { defaultValue: 'Tap to ask about the Bible' });
+        return t('home.tapToAsk', { defaultValue: 'Tap anywhere to ask' });
       case 'listening':
-        return t('home.listening', { defaultValue: 'Listening...' });
+        return t('home.listening', { defaultValue: 'Listening…' });
       case 'processing':
-        return t('home.thinking', { defaultValue: 'Thinking...' });
-      case 'responded':
-        return '';
-      case 'error':
+        return t('home.thinking', { defaultValue: 'Thinking…' });
+      default:
         return '';
     }
   })();
+
+  const micIconName: keyof typeof Ionicons.glyphMap =
+    assistantState === 'listening' ? 'mic' : 'mic-outline';
 
   return (
     <SafeAreaView
@@ -216,65 +259,68 @@ export function HomeScreen() {
           {getGreeting()}
         </Text>
 
-        {/* AI Voice Assistant Card (Hero) */}
-        <View
-          style={[
+        {/* HERO — entire card is tappable so visually impaired users
+            don't need to aim at the mic button. */}
+        <Pressable
+          onPress={handleMicPress}
+          accessible={true}
+          accessibilityRole="button"
+          accessibilityLabel={heroLabel}
+          accessibilityState={{
+            busy: assistantState === 'processing',
+            selected: assistantState === 'listening',
+          }}
+          style={({ pressed }) => [
             styles.heroCard,
             {
               backgroundColor: colors.cardElevated,
-              borderColor: colors.border,
+              borderColor:
+                assistantState === 'listening' ? colors.accent : colors.border,
               shadowColor: colors.accent,
+              opacity: pressed ? 0.92 : 1,
             },
           ]}
-          accessible={true}
-          accessibilityLabel="Bible voice assistant"
         >
-          {/* Accent strip at top of card */}
           <View
             style={[styles.heroAccentStrip, { backgroundColor: colors.accent }]}
           />
 
           <View style={styles.heroContent}>
-            {/* Mic Button */}
-            <Pressable
-              onPress={handleMicPress}
-              accessibilityRole="button"
-              accessibilityLabel={
-                assistantState === 'listening'
-                  ? 'Stop listening. Double tap to stop'
-                  : 'Ask the Bible assistant. Double tap to start listening'
-              }
-              accessibilityState={{ busy: assistantState === 'processing' }}
-              style={({ pressed }) => [
+            {/* Giant mic button */}
+            <View
+              style={[
                 styles.micButton,
                 {
                   backgroundColor:
                     assistantState === 'listening'
                       ? colors.accentDark
                       : colors.accent,
-                  opacity: pressed ? 0.85 : 1,
                   shadowColor: colors.accent,
+                  borderColor:
+                    assistantState === 'listening'
+                      ? colors.accent
+                      : 'transparent',
                 },
               ]}
             >
               {assistantState === 'processing' ? (
                 <ActivityIndicator size="large" color="#FFFFFF" />
               ) : (
-                <Ionicons name={micIconName} size={40} color="#FFFFFF" />
+                <Ionicons name={micIconName} size={MIC_SIZE * 0.45} color="#FFFFFF" />
               )}
-            </Pressable>
+            </View>
 
-            {/* Status Text */}
+            {/* Big status text */}
             {statusText ? (
               <Text
-                style={[styles.statusText, { color: colors.textSecondary }]}
+                style={[styles.statusText, { color: colors.text }]}
                 accessibilityLiveRegion="polite"
               >
                 {statusText}
               </Text>
             ) : null}
 
-            {/* User Question */}
+            {/* User question / partial transcript */}
             {displayTranscript ? (
               <View
                 style={[
@@ -288,7 +334,7 @@ export function HomeScreen() {
               </View>
             ) : null}
 
-            {/* AI Response */}
+            {/* AI response */}
             {assistantState === 'responded' && aiAnswer ? (
               <View style={styles.answerContainer}>
                 <View
@@ -348,7 +394,7 @@ export function HomeScreen() {
               </View>
             ) : null}
 
-            {/* Error State */}
+            {/* Error */}
             {assistantState === 'error' ? (
               <View style={styles.answerContainer}>
                 <Text style={[styles.errorText, { color: colors.error }]}>
@@ -374,9 +420,22 @@ export function HomeScreen() {
               </View>
             ) : null}
           </View>
-        </View>
+        </Pressable>
 
-        {/* Daily Verse Card */}
+        {/* Voice command hints for visually impaired users */}
+        {assistantState === 'idle' ? (
+          <Text
+            style={[styles.voiceHints, { color: colors.textSecondary }]}
+            accessibilityRole="text"
+          >
+            {t('home.voiceHints', {
+              defaultValue:
+                'Try saying: "Ask what does the Bible say about love", "Open favorites", "Open search", or "Repeat".',
+            })}
+          </Text>
+        ) : null}
+
+        {/* Daily Verse */}
         <Text
           style={[styles.sectionTitle, { color: colors.text }]}
           accessibilityRole="header"
@@ -385,13 +444,13 @@ export function HomeScreen() {
         </Text>
 
         {dailyLoading ? (
-          <LoadingSpinner size="small" />
-        ) : verse ? (
+          <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
+        ) : dailyVerse ? (
           <Pressable
             onPress={handleDailyVersePress}
             accessibilityRole="button"
-            accessibilityLabel={`${t('home.dailyVerse')}: ${verseReference}. ${verseText}`}
-            accessibilityHint="Double tap to view full verse"
+            accessibilityLabel={`${t('home.dailyVerse')}: ${dailyVerse.reference}. ${verseText}`}
+            accessibilityHint="Double tap to view the full verse"
             style={({ pressed }) => [
               styles.dailyVerseCard,
               {
@@ -402,7 +461,7 @@ export function HomeScreen() {
             ]}
           >
             <Text style={[styles.verseReference, { color: colors.accent }]}>
-              {verseReference}
+              {dailyVerse.reference}
             </Text>
             <Text
               style={[styles.verseText, { color: colors.text }]}
@@ -416,7 +475,7 @@ export function HomeScreen() {
           </Pressable>
         ) : (
           <Text style={[styles.noVerse, { color: colors.textSecondary }]}>
-            {t('home.noDailyVerse')}
+            {t('home.noDailyVerse', { defaultValue: 'No verse available' })}
           </Text>
         )}
 
@@ -425,7 +484,7 @@ export function HomeScreen() {
           <Pressable
             onPress={handleSearchPress}
             accessibilityRole="button"
-            accessibilityLabel="Search Bible"
+            accessibilityLabel="Search the Bible"
             style={({ pressed }) => [
               styles.quickActionPill,
               {
@@ -444,7 +503,7 @@ export function HomeScreen() {
           <Pressable
             onPress={handleFavoritesPress}
             accessibilityRole="button"
-            accessibilityLabel="Favorites"
+            accessibilityLabel="Open favorites"
             style={({ pressed }) => [
               styles.quickActionPill,
               {
@@ -463,7 +522,7 @@ export function HomeScreen() {
       </ScrollView>
 
       {/* Mini playback bar */}
-      {speakingStatus !== 'idle' && assistantState !== 'responded' && (
+      {isSpeaking && assistantState !== 'responded' ? (
         <View
           style={[
             styles.miniBar,
@@ -476,7 +535,7 @@ export function HomeScreen() {
             style={[styles.miniBarText, { color: colors.text }]}
             numberOfLines={1}
           >
-            {speakingStatus === 'speaking' ? 'Playing...' : 'Paused'}
+            Playing…
           </Text>
           <IconButtonAccessible
             iconName="stop-circle"
@@ -485,7 +544,7 @@ export function HomeScreen() {
             color={colors.error}
           />
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -506,42 +565,42 @@ const styles = StyleSheet.create({
   greeting: {
     fontSize: 18,
     fontWeight: '400',
-    marginBottom: 24,
+    marginBottom: 20,
   },
-  // Hero AI Card
   heroCard: {
-    borderRadius: 20,
-    borderWidth: 1,
+    borderRadius: 24,
+    borderWidth: 2,
     overflow: 'hidden',
-    marginBottom: 28,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
-    elevation: 6,
+    marginBottom: 16,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.18,
+    shadowRadius: 16,
+    elevation: 8,
   },
   heroAccentStrip: {
-    height: 4,
+    height: 6,
     width: '100%',
   },
   heroContent: {
-    padding: 24,
+    padding: 28,
     alignItems: 'center',
   },
   micButton: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: MIC_SIZE,
+    height: MIC_SIZE,
+    borderRadius: MIC_SIZE / 2,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    marginBottom: 20,
+    borderWidth: 4,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 16,
+    elevation: 12,
   },
   statusText: {
-    fontSize: 16,
-    fontWeight: '400',
+    fontSize: 22,
+    fontWeight: '600',
     marginBottom: 12,
     textAlign: 'center',
   },
@@ -553,7 +612,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   questionText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '400',
     fontStyle: 'italic',
     textAlign: 'center',
@@ -570,12 +629,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   answerScroll: {
-    maxHeight: 200,
+    maxHeight: 220,
   },
   answerText: {
-    fontSize: 16,
+    fontSize: 17,
     fontWeight: '400',
-    lineHeight: 24,
+    lineHeight: 25,
   },
   responseActions: {
     flexDirection: 'row',
@@ -585,15 +644,15 @@ const styles = StyleSheet.create({
   actionPill: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 22,
     gap: 6,
     minHeight: MIN_TOUCH_SIZE,
   },
   actionPillText: {
     color: '#FFFFFF',
-    fontSize: 14,
+    fontSize: 15,
     fontWeight: '600',
   },
   errorText: {
@@ -601,13 +660,19 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 22,
   },
-  // Section
+  voiceHints: {
+    fontSize: 13,
+    lineHeight: 20,
+    textAlign: 'center',
+    fontStyle: 'italic',
+    marginBottom: 24,
+    paddingHorizontal: 8,
+  },
   sectionTitle: {
     fontSize: 20,
     fontWeight: '700',
     marginBottom: 12,
   },
-  // Daily Verse
   dailyVerseCard: {
     padding: 16,
     borderRadius: 16,
@@ -635,7 +700,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginVertical: 20,
   },
-  // Quick Actions
   quickActions: {
     flexDirection: 'row',
     gap: 12,
@@ -656,7 +720,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
   },
-  // Mini Bar
   miniBar: {
     flexDirection: 'row',
     alignItems: 'center',

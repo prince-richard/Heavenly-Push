@@ -6,33 +6,30 @@ import {
   Share,
   StyleSheet,
   AccessibilityInfo,
+  ActivityIndicator,
+  Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
-import { useRoute } from '@react-navigation/native';
+import { useRoute, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
-import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
-import { useVerseContext } from '@/hooks/useVerseContext';
 import { useTTS } from '@/hooks/useTTS';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useFavoritesStore } from '@/stores/useFavoritesStore';
+import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import {
+  getVerseByReference,
+  explainVerse,
+  type ParallelVerseResponse,
+} from '@/services/ai/AiBibleService';
 import { PlaybackControls } from '@/components/audio/PlaybackControls';
-import { FavoriteButton } from '@/components/verse/FavoriteButton';
-import { ContextNavigator } from '@/components/verse/ContextNavigator';
-import { CrossReferences } from '@/components/verse/CrossReferences';
-import { ChapterSummary } from '@/components/verse/ChapterSummary';
-import { HistoricalContext } from '@/components/verse/HistoricalContext';
-import { ReflectionRecorder } from '@/components/audio/ReflectionRecorder';
-import { MemorizationPlayer } from '@/components/audio/MemorizationPlayer';
-import { SectionHeader } from '@/components/common/SectionHeader';
-import { LoadingSpinner } from '@/components/common/LoadingSpinner';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
 import { PrimaryButton } from '@/components/common/PrimaryButton';
-import { AiBibleAssistant } from '@/components/ai/AiBibleAssistant';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
-import type { BibleVerse } from '@/types/models';
 
 type DetailRoute = RouteProp<RootStackParamList, 'VerseDetail'>;
 type DetailNav = NativeStackNavigationProp<RootStackParamList>;
@@ -42,96 +39,153 @@ export function VerseDetailScreen() {
   const { colors } = useAccessibility();
   const route = useRoute<DetailRoute>();
   const navigation = useNavigation<DetailNav>();
-  const { verseId, autoPlay } = route.params;
+  // Support legacy verseId param OR new reference param.
+  const reference = route.params?.reference ?? route.params?.verseId ?? '';
+  const autoPlay = route.params?.autoPlay;
 
-  const { currentVerse, previousVerses, nextVerses, loading } =
-    useVerseContext(verseId, 2);
-  const { speakVerse, speakText, stop, isSpeaking } = useTTS();
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
   const autoPlayOnOpen = useSettingsStore((s) => s.autoPlayVerseOnOpen);
+  const { speakText, stop, isSpeaking } = useTTS();
+  const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
+  const favorites = useFavoritesStore((s) => s.favorites);
+  const addFavorite = useFavoritesStore((s) => s.add);
+  const removeFavorite = useFavoritesStore((s) => s.remove);
 
-  const [showContext, setShowContext] = useState(false);
-  const [showMemorization, setShowMemorization] = useState(false);
-  const [showReflection, setShowReflection] = useState(false);
+  const [verse, setVerse] = useState<ParallelVerseResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Language fallback notice
-  const showFallback =
-    !loading && currentVerse != null &&
-    primaryLanguage === 'ta' && !currentVerse.textTa && !!currentVerse.textEn;
+  const [explanation, setExplanation] = useState<string | null>(null);
+  const [explainLoading, setExplainLoading] = useState(false);
+  const [explainError, setExplainError] = useState<string | null>(null);
 
-  // Auto-play on open if enabled
+  // Load verse via AI/API
   useEffect(() => {
-    if (currentVerse && (autoPlay || autoPlayOnOpen)) {
+    if (!reference) {
+      setLoadError('No reference provided');
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setLoadError(null);
+    getVerseByReference(reference)
+      .then((v) => {
+        if (!cancelled) {
+          setVerse(v);
+          setLoading(false);
+        }
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) {
+          setLoadError(err instanceof Error ? err.message : 'Failed to load verse');
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [reference]);
+
+  const englishText = verse?.english?.found ? verse.english.text : '';
+  const tamilText = verse?.tamil?.found ? verse.tamil.text : '';
+  const primaryText =
+    primaryLanguage === 'ta' ? tamilText || englishText : englishText || tamilText;
+  const secondaryText =
+    primaryLanguage === 'ta' ? englishText : tamilText;
+
+  const isFavorited = favorites.some((f) => f.reference === reference);
+
+  // Auto-play if requested
+  useEffect(() => {
+    if (verse && primaryText && (autoPlay || autoPlayOnOpen)) {
       const timer = setTimeout(() => {
-        speakVerse(currentVerse, primaryLanguage);
+        void speakText(primaryText, primaryLanguage);
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [currentVerse?.id, autoPlay, autoPlayOnOpen]);
-
-  // Announce language fallback for accessibility
-  useEffect(() => {
-    if (showFallback) {
-      AccessibilityInfo.announceForAccessibility(
-        t('verse.languageFallback', { language: 'Tamil' })
-      );
-    }
-  }, [showFallback, t]);
-
-  const getVerseText = useCallback(
-    (verse: BibleVerse, lang: 'en' | 'ta'): string => {
-      if (lang === 'ta') {
-        return verse.textTa ?? verse.textEn ?? '';
-      }
-      return verse.textEn ?? verse.textTa ?? '';
-    },
-    []
-  );
+  }, [verse, primaryText, autoPlay, autoPlayOnOpen, speakText, primaryLanguage]);
 
   const handlePlay = useCallback(() => {
-    if (currentVerse) {
-      speakVerse(currentVerse, primaryLanguage);
+    if (primaryText) {
+      void speakText(primaryText, primaryLanguage);
     }
-  }, [currentVerse, primaryLanguage, speakVerse]);
+  }, [primaryText, primaryLanguage, speakText]);
 
   const handleStop = useCallback(() => {
     stop();
   }, [stop]);
 
   const handleRepeat = useCallback(() => {
-    if (currentVerse) {
+    if (primaryText) {
       stop();
-      setTimeout(() => speakVerse(currentVerse, primaryLanguage), 100);
+      setTimeout(() => {
+        void speakText(primaryText, primaryLanguage);
+      }, 100);
     }
-  }, [currentVerse, primaryLanguage, speakVerse, stop]);
+  }, [primaryText, primaryLanguage, speakText, stop]);
 
   const handleShare = useCallback(async () => {
-    if (!currentVerse) return;
-
-    const ref = `${currentVerse.bookNameEn} ${currentVerse.chapter}:${currentVerse.verse}`;
-    const text = currentVerse.textEn ?? currentVerse.textTa ?? '';
-    const message = `${ref}\n\n${text}\n\n- Shared from Heavenly Push`;
-
+    if (!verse) return;
+    const message = `${reference}\n\n${englishText || tamilText}\n\n- Shared from Heavenly Push`;
     try {
       await Share.share({ message });
     } catch {
-      // Share cancelled or error
+      // cancelled or error
     }
-  }, [currentVerse]);
+  }, [verse, reference, englishText, tamilText]);
 
-  const handleNavigateToVerse = useCallback(
-    (id: string) => {
-      navigation.push('VerseDetail', { verseId: id });
-    },
-    [navigation]
-  );
+  const handleToggleFavorite = useCallback(() => {
+    if (!verse) return;
+    if (isFavorited) {
+      removeFavorite(reference);
+      AccessibilityInfo.announceForAccessibility(t('favorites.remove'));
+    } else {
+      addFavorite({
+        reference,
+        englishText,
+        tamilText,
+        snippet: (englishText || tamilText).slice(0, 120),
+        language: primaryLanguage,
+        savedAt: Date.now(),
+      });
+      AccessibilityInfo.announceForAccessibility(
+        t('favorites.added', { defaultValue: 'Added to favorites' }),
+      );
+    }
+  }, [
+    verse,
+    isFavorited,
+    reference,
+    englishText,
+    tamilText,
+    primaryLanguage,
+    addFavorite,
+    removeFavorite,
+    t,
+  ]);
 
-  const handleVersePress = useCallback(
-    (verse: BibleVerse) => {
-      navigation.push('VerseDetail', { verseId: verse.id });
-    },
-    [navigation]
-  );
+  const handleExplain = useCallback(async () => {
+    if (!reference) return;
+    setExplainLoading(true);
+    setExplainError(null);
+    try {
+      const res = await explainVerse({
+        question: `Explain ${reference}`,
+        reference,
+        preferredLanguage: primaryLanguage,
+        includeParallelText: true,
+      });
+      setExplanation(res.explanation);
+      setLastAiAnswer(res.explanation, primaryLanguage);
+      AccessibilityInfo.announceForAccessibility('Explanation ready');
+      void speakText(res.explanation, primaryLanguage);
+    } catch (err) {
+      setExplainError(err instanceof Error ? err.message : 'Failed to get explanation');
+    } finally {
+      setExplainLoading(false);
+    }
+  }, [reference, primaryLanguage, speakText, setLastAiAnswer]);
 
   if (loading) {
     return (
@@ -139,36 +193,41 @@ export function VerseDetailScreen() {
         style={{ flex: 1, backgroundColor: colors.background }}
         edges={['bottom']}
       >
-        <LoadingSpinner />
-      </SafeAreaView>
-    );
-  }
-
-  if (!currentVerse) {
-    return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        edges={['bottom']}
-      >
         <View style={styles.center}>
-          <Text style={[styles.errorText, { color: colors.textSecondary }]}>
-            Verse not found
+          <ActivityIndicator size="large" color={colors.accent} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+            Loading {reference}…
           </Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const reference = `${primaryLanguage === 'ta' ? currentVerse.bookNameTa : currentVerse.bookNameEn} ${currentVerse.chapter}:${currentVerse.verse}`;
-  const textPrimary = getVerseText(currentVerse, primaryLanguage);
-  const textSecondary = getVerseText(
-    currentVerse,
-    primaryLanguage === 'en' ? 'ta' : 'en'
-  );
-  const hasSecondaryText =
-    primaryLanguage === 'en'
-      ? currentVerse.textTa != null
-      : currentVerse.textEn != null;
+  if (loadError || !verse) {
+    return (
+      <SafeAreaView
+        style={{ flex: 1, backgroundColor: colors.background }}
+        edges={['bottom']}
+      >
+        <View style={styles.center}>
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            {loadError || 'Verse not found'}
+          </Text>
+          <Pressable
+            onPress={() => navigation.goBack()}
+            accessibilityRole="button"
+            accessibilityLabel="Go back"
+            style={({ pressed }) => [
+              styles.backButton,
+              { backgroundColor: colors.accent, opacity: pressed ? 0.85 : 1 },
+            ]}
+          >
+            <Text style={styles.backButtonText}>Go back</Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView
@@ -180,7 +239,7 @@ export function VerseDetailScreen() {
         contentContainerStyle={styles.content}
         showsVerticalScrollIndicator={false}
       >
-        {/* Reference header + actions */}
+        {/* Header row */}
         <View style={styles.headerRow}>
           <Text
             style={[styles.reference, { color: colors.accent }]}
@@ -189,7 +248,15 @@ export function VerseDetailScreen() {
             {reference}
           </Text>
           <View style={styles.headerActions}>
-            <FavoriteButton verseId={currentVerse.id} size={28} />
+            <IconButtonAccessible
+              iconName={isFavorited ? 'heart' : 'heart-outline'}
+              onPress={handleToggleFavorite}
+              accessibilityLabel={
+                isFavorited ? 'Remove from favorites' : 'Add to favorites'
+              }
+              color={isFavorited ? colors.accent : colors.text}
+              size={28}
+            />
             <IconButtonAccessible
               iconName="share-outline"
               onPress={handleShare}
@@ -199,138 +266,85 @@ export function VerseDetailScreen() {
           </View>
         </View>
 
-        {/* Fallback notice */}
-        {showFallback && (
-          <Text style={[styles.fallbackNotice, { color: colors.error }]}>
-            {t('verse.languageFallback', { language: 'Tamil' })}
-          </Text>
-        )}
-
         {/* Primary text */}
         <Text
           style={[styles.verseText, { color: colors.text }]}
           accessible={true}
           accessibilityRole="text"
-          accessibilityLabel={`${reference}. ${textPrimary}`}
+          accessibilityLabel={`${reference}. ${primaryText}`}
         >
-          {textPrimary}
+          {primaryText}
         </Text>
 
-        {/* Secondary language text */}
-        {hasSecondaryText && textSecondary && (
+        {/* Secondary language */}
+        {secondaryText ? (
           <Text
             style={[styles.secondaryText, { color: colors.textSecondary }]}
             accessible={true}
             accessibilityRole="text"
           >
-            {textSecondary}
+            {secondaryText}
           </Text>
-        )}
+        ) : null}
 
-        {/* Theme tags */}
-        {currentVerse.themeTags.length > 0 && (
-          <View style={styles.tagsRow}>
-            {currentVerse.themeTags.map((tag) => (
-              <View
-                key={tag}
-                style={[
-                  styles.tag,
-                  {
-                    backgroundColor: colors.inputBackground,
-                    borderColor: colors.border,
-                  },
-                ]}
-              >
-                <Text style={[styles.tagText, { color: colors.textSecondary }]}>
-                  {tag}
-                </Text>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Playback Controls */}
+        {/* Playback controls */}
         <PlaybackControls
           onPlay={handlePlay}
           onStop={handleStop}
           onRepeat={handleRepeat}
         />
 
-        {/* Action buttons */}
+        {/* Explain with AI */}
         <View style={styles.actionsContainer}>
           <PrimaryButton
-            title={t('verse.readContext')}
-            onPress={() => setShowContext(!showContext)}
-            accessibilityHint={
-              showContext ? 'Hide surrounding verses' : 'Show surrounding verses'
+            title={
+              explainLoading
+                ? t('verse.explaining', { defaultValue: 'Getting explanation…' })
+                : t('verse.explain', { defaultValue: 'Explain this verse' })
             }
-          />
-
-          <PrimaryButton
-            title={t('verse.memorize')}
-            onPress={() => setShowMemorization(!showMemorization)}
-            accessibilityHint={
-              showMemorization ? 'Hide memorization tool' : 'Start memorizing this verse'
-            }
-          />
-
-          <PrimaryButton
-            title={t('verse.reflection')}
-            onPress={() => setShowReflection(!showReflection)}
-            accessibilityHint={
-              showReflection ? 'Hide reflection recorder' : 'Record a reflection'
-            }
+            onPress={handleExplain}
+            disabled={explainLoading}
+            accessibilityHint="Get an AI explanation of this verse"
           />
         </View>
 
-        {/* Context Navigator */}
-        {showContext && (
-          <ContextNavigator
-            previousVerses={previousVerses}
-            nextVerses={nextVerses}
-            onNavigateToVerse={handleNavigateToVerse}
-          />
-        )}
+        {explainError ? (
+          <Text style={[styles.errorText, { color: colors.error }]}>
+            {explainError}
+          </Text>
+        ) : null}
 
-        {/* Chapter Summary */}
-        <ChapterSummary
-          bookCode={currentVerse.bookCode}
-          chapter={currentVerse.chapter}
-        />
+        {explanation ? (
+          <View
+            style={[
+              styles.explanationCard,
+              { backgroundColor: colors.card, borderColor: colors.accent },
+            ]}
+          >
+            <View style={styles.explanationHeader}>
+              <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
+              <Text style={[styles.explanationTitle, { color: colors.accent }]}>
+                {t('verse.explanation', { defaultValue: 'Explanation' })}
+              </Text>
+              {isSpeaking ? (
+                <IconButtonAccessible
+                  iconName="stop-circle-outline"
+                  onPress={handleStop}
+                  accessibilityLabel="Stop speaking"
+                  color={colors.error}
+                  size={22}
+                />
+              ) : null}
+            </View>
+            <Text
+              style={[styles.explanationText, { color: colors.text }]}
+              selectable={true}
+            >
+              {explanation}
+            </Text>
+          </View>
+        ) : null}
 
-        {/* Historical Context */}
-        <HistoricalContext
-          verseId={currentVerse.id}
-          bookCode={currentVerse.bookCode}
-        />
-
-        {/* AI Bible Assistant */}
-        <AiBibleAssistant
-          verseReference={`${currentVerse.bookNameEn} ${currentVerse.chapter}:${currentVerse.verse}`}
-          verseText={currentVerse.textEn ?? currentVerse.textTa ?? ''}
-          verseId={currentVerse.id}
-        />
-
-        {/* Cross References */}
-        <CrossReferences
-          verseId={currentVerse.id}
-          onVersePress={handleVersePress}
-        />
-
-        {/* Memorization Player */}
-        {showMemorization && (
-          <MemorizationPlayer
-            verse={currentVerse}
-            language={primaryLanguage}
-          />
-        )}
-
-        {/* Reflection Recorder */}
-        {showReflection && (
-          <ReflectionRecorder verseId={currentVerse.id} />
-        )}
-
-        {/* Bottom spacing */}
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
@@ -348,9 +362,29 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    padding: 24,
+  },
+  loadingText: {
+    fontSize: 16,
+    marginTop: 12,
   },
   errorText: {
-    fontSize: 18,
+    fontSize: 16,
+    textAlign: 'center',
+    marginVertical: 12,
+  },
+  backButton: {
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 18,
+    minHeight: MIN_TOUCH_SIZE,
+    justifyContent: 'center',
+  },
+  backButtonText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: '600',
   },
   headerRow: {
     flexDirection: 'row',
@@ -367,11 +401,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     flex: 1,
   },
-  fallbackNotice: {
-    fontSize: 14,
-    fontStyle: 'italic',
-    marginBottom: 8,
-  },
   verseText: {
     fontSize: 20,
     lineHeight: 32,
@@ -383,24 +412,30 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginBottom: 16,
   },
-  tagsRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    marginBottom: 16,
-  },
-  tag: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-    borderWidth: 1,
-  },
-  tagText: {
-    fontSize: 12,
-    fontWeight: '500',
-  },
   actionsContainer: {
     gap: 12,
     marginVertical: 16,
+  },
+  explanationCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderLeftWidth: 3,
+    marginTop: 12,
+  },
+  explanationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 10,
+  },
+  explanationTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    flex: 1,
+  },
+  explanationText: {
+    fontSize: 16,
+    lineHeight: 24,
   },
 });

@@ -5,8 +5,6 @@ import { useTranslation } from 'react-i18next';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { useFavoritesStore } from '@/stores/useFavoritesStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
-import { useDatabase } from '@/contexts/DatabaseContext';
-import { FavoritesRepository } from '@/db/repositories/FavoritesRepository';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 
 let Haptics: typeof import('expo-haptics') | null = null;
@@ -18,40 +16,57 @@ try {
 }
 
 interface FavoriteButtonProps {
-  verseId: string;
+  reference: string;
+  englishText?: string;
+  tamilText?: string;
   size?: number;
 }
 
-export function FavoriteButton({ verseId, size = 28 }: FavoriteButtonProps) {
+/**
+ * Tappable heart button that toggles a favorite by reference.
+ * Persists to AsyncStorage via useFavoritesStore (no local DB).
+ */
+export function FavoriteButton({
+  reference,
+  englishText = '',
+  tamilText = '',
+  size = 28,
+}: FavoriteButtonProps) {
   const { t } = useTranslation();
   const { colors } = useAccessibility();
-  const db = useDatabase();
-  const isFavorite = useFavoritesStore((s) => s.isFavorite(verseId));
+  const isFavorite = useFavoritesStore((s) => s.isFavorite(reference));
   const add = useFavoritesStore((s) => s.add);
   const remove = useFavoritesStore((s) => s.remove);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
 
   const handlePress = useCallback(() => {
     if (isFavorite) {
-      remove(verseId);
-      // Persist removal to DB
-      const favRepo = new FavoritesRepository(db);
-      void favRepo.remove(verseId).catch((err) =>
-        console.error('FavoriteButton remove error:', err)
-      );
+      remove(reference);
     } else {
-      add(verseId);
-      // Persist addition to DB
-      const favRepo = new FavoritesRepository(db);
-      void favRepo.add(verseId).catch((err) =>
-        console.error('FavoriteButton add error:', err)
-      );
+      add({
+        reference,
+        englishText,
+        tamilText,
+        snippet: (englishText || tamilText).slice(0, 120),
+        language: primaryLanguage,
+        savedAt: Date.now(),
+      });
     }
 
     if (hapticsEnabled && Haptics && Platform.OS !== 'web') {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     }
-  }, [db, isFavorite, verseId, add, remove, hapticsEnabled]);
+  }, [
+    isFavorite,
+    reference,
+    englishText,
+    tamilText,
+    primaryLanguage,
+    add,
+    remove,
+    hapticsEnabled,
+  ]);
 
   return (
     <Pressable
