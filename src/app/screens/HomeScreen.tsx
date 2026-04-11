@@ -8,8 +8,11 @@ import {
   AccessibilityInfo,
   ActivityIndicator,
   Dimensions,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -20,6 +23,7 @@ import { useTTS } from '@/hooks/useTTS';
 import { useVoiceController } from '@/hooks/useVoiceController';
 import { useVoiceStore } from '@/stores/useVoiceStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 import {
   askAnything,
   getAiDailyVerse,
@@ -27,6 +31,9 @@ import {
   type AskVerse,
 } from '@/services/ai/AiBibleService';
 import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
+import { Halo } from '@/components/common/Halo';
+import { Starfield } from '@/components/common/Starfield';
+import { FavoriteButton } from '@/components/verse/FavoriteButton';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
 import type { RootStackParamList } from '@/types/navigation';
 
@@ -56,6 +63,7 @@ export function HomeScreen() {
   const transcript = useVoiceStore((s) => s.transcript);
   const partialTranscript = useVoiceStore((s) => s.partialTranscript);
   const setLastAiAnswer = usePlaybackStore((s) => s.setLastAiAnswer);
+  const highContrastMode = useSettingsStore((s) => s.highContrastMode);
 
   const [assistantState, setAssistantState] = useState<AssistantState>('idle');
   const [userQuestion, setUserQuestion] = useState('');
@@ -68,8 +76,75 @@ export function HomeScreen() {
 
   const prevTranscriptRef = useRef('');
 
-  // Load daily verse from AI — uses the user's currently selected
-  // recognition language so the daily verse matches what they hear.
+  // Animations
+  const answerFade = useRef(new Animated.Value(0)).current;
+  const answerTranslate = useRef(new Animated.Value(12)).current;
+  const micScale = useRef(new Animated.Value(1)).current;
+
+  // Screen entry fade
+  const screenFade = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    Animated.timing(screenFade, {
+      toValue: 1,
+      duration: 500,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    }).start();
+  }, [screenFade]);
+
+  // Pulsing mic when listening
+  useEffect(() => {
+    if (assistantState === 'listening') {
+      const loop = Animated.loop(
+        Animated.sequence([
+          Animated.timing(micScale, {
+            toValue: 1.06,
+            duration: 700,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(micScale, {
+            toValue: 1,
+            duration: 700,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+      );
+      loop.start();
+      return () => loop.stop();
+    } else {
+      Animated.timing(micScale, {
+        toValue: 1,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, [assistantState, micScale]);
+
+  // Fade the answer in when it arrives
+  useEffect(() => {
+    if (assistantState === 'responded' && aiAnswer) {
+      answerFade.setValue(0);
+      answerTranslate.setValue(12);
+      Animated.parallel([
+        Animated.timing(answerFade, {
+          toValue: 1,
+          duration: 450,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(answerTranslate, {
+          toValue: 0,
+          duration: 450,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }
+  }, [assistantState, aiAnswer, answerFade, answerTranslate]);
+
+  // Load daily verse from AI
   useEffect(() => {
     let cancelled = false;
     setDailyLoading(true);
@@ -140,17 +215,12 @@ export function HomeScreen() {
     }
   }, [isListening, assistantState, transcript]);
 
-  /**
-   * Single-button toggle: tap to start, tap to stop.
-   * Also exposed as tap-anywhere-on-hero for easier reach.
-   */
   const handleMicPress = useCallback(async () => {
     if (isListening) {
       await stopListening();
       return;
     }
 
-    // New question — reset state
     stopTTS();
     setAiAnswer('');
     setAiVerses([]);
@@ -253,389 +323,496 @@ export function HomeScreen() {
     assistantState === 'listening' ? 'mic' : 'mic-outline';
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={['top']}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.headerRow}>
-          <View style={{ flex: 1 }}>
-            <Text
-              style={[styles.appName, { color: colors.accent }]}
-              accessibilityRole="header"
-            >
-              Heavenly Push
-            </Text>
-            <Text style={[styles.greeting, { color: colors.textSecondary }]}>
-              {getGreeting()}
-            </Text>
-          </View>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* Backdrop gradient — sky at night / dawn */}
+      <LinearGradient
+        colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
 
-          {/* Language pill — flips recognitionLanguage without
-              touching the user's persistent settings. */}
-          <View
-            style={[styles.langPill, { borderColor: colors.border }]}
-            accessibilityRole="radiogroup"
-            accessibilityLabel="Voice language"
+      {/* Twinkling starfield — only for dark theme */}
+      {highContrastMode ? <Starfield count={20} color={colors.gold} /> : null}
+
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <Animated.View style={{ flex: 1, opacity: screenFade }}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
           >
-            <Pressable
-              onPress={handleSetEnglish}
-              accessibilityRole="radio"
-              accessibilityLabel="Speak and reply in English"
-              accessibilityState={{ selected: recognitionLanguage === 'en' }}
-              style={[
-                styles.langPillButton,
-                {
-                  backgroundColor:
-                    recognitionLanguage === 'en' ? colors.accent : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.langPillText,
-                  {
-                    color: recognitionLanguage === 'en' ? '#FFFFFF' : colors.text,
-                  },
-                ]}
-              >
-                EN
-              </Text>
-            </Pressable>
-            <Pressable
-              onPress={handleSetTamil}
-              accessibilityRole="radio"
-              accessibilityLabel="Speak and reply in Tamil"
-              accessibilityState={{ selected: recognitionLanguage === 'ta' }}
-              style={[
-                styles.langPillButton,
-                {
-                  backgroundColor:
-                    recognitionLanguage === 'ta' ? colors.accent : 'transparent',
-                },
-              ]}
-            >
-              <Text
-                style={[
-                  styles.langPillText,
-                  {
-                    color: recognitionLanguage === 'ta' ? '#FFFFFF' : colors.text,
-                  },
-                ]}
-              >
-                தமிழ்
-              </Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* HERO — entire card is tappable so visually impaired users
-            don't need to aim at the mic button. */}
-        <Pressable
-          onPress={handleMicPress}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={heroLabel}
-          accessibilityState={{
-            busy: assistantState === 'processing',
-            selected: assistantState === 'listening',
-          }}
-          style={({ pressed }) => [
-            styles.heroCard,
-            {
-              backgroundColor: colors.cardElevated,
-              borderColor:
-                assistantState === 'listening' ? colors.accent : colors.border,
-              shadowColor: colors.accent,
-              opacity: pressed ? 0.92 : 1,
-            },
-          ]}
-        >
-          <View
-            style={[styles.heroAccentStrip, { backgroundColor: colors.accent }]}
-          />
-
-          <View style={styles.heroContent}>
-            {/* Giant mic button */}
-            <View
-              style={[
-                styles.micButton,
-                {
-                  backgroundColor:
-                    assistantState === 'listening'
-                      ? colors.accentDark
-                      : colors.accent,
-                  shadowColor: colors.accent,
-                  borderColor:
-                    assistantState === 'listening'
-                      ? colors.accent
-                      : 'transparent',
-                },
-              ]}
-            >
-              {assistantState === 'processing' ? (
-                <ActivityIndicator size="large" color="#FFFFFF" />
-              ) : (
-                <Ionicons name={micIconName} size={MIC_SIZE * 0.45} color="#FFFFFF" />
-              )}
-            </View>
-
-            {/* Big status text */}
-            {statusText ? (
-              <Text
-                style={[styles.statusText, { color: colors.text }]}
-                accessibilityLiveRegion="polite"
-              >
-                {statusText}
-              </Text>
-            ) : null}
-
-            {/* User question / partial transcript */}
-            {displayTranscript ? (
-              <View
-                style={[
-                  styles.questionBubble,
-                  { backgroundColor: colors.card, borderColor: colors.border },
-                ]}
-              >
-                <Text style={[styles.questionText, { color: colors.text }]}>
-                  {displayTranscript}
+            {/* Header row */}
+            <View style={styles.headerRow}>
+              <View style={{ flex: 1 }}>
+                <Text
+                  style={[styles.appName, { color: colors.gold }]}
+                  accessibilityRole="header"
+                >
+                  Heavenly Push
+                </Text>
+                <Text style={[styles.greeting, { color: colors.textSecondary }]}>
+                  {getGreeting()}
                 </Text>
               </View>
-            ) : null}
 
-            {/* AI response */}
-            {assistantState === 'responded' && aiAnswer ? (
-              <View style={styles.answerContainer}>
-                <View
+              {/* Language pill */}
+              <View
+                style={[
+                  styles.langPill,
+                  { borderColor: colors.border, backgroundColor: colors.card },
+                ]}
+                accessibilityRole="radiogroup"
+                accessibilityLabel="Voice language"
+              >
+                <Pressable
+                  onPress={handleSetEnglish}
+                  accessibilityRole="radio"
+                  accessibilityLabel="Speak and reply in English"
+                  accessibilityState={{ selected: recognitionLanguage === 'en' }}
                   style={[
-                    styles.answerBubble,
-                    { backgroundColor: colors.card, borderColor: colors.accent },
+                    styles.langPillButton,
+                    {
+                      backgroundColor:
+                        recognitionLanguage === 'en' ? colors.accentDark : 'transparent',
+                    },
                   ]}
                 >
-                  <ScrollView
-                    style={styles.answerScroll}
-                    nestedScrollEnabled={true}
-                  >
-                    <Text
-                      style={[styles.answerText, { color: colors.text }]}
-                      selectable={true}
-                    >
-                      {aiAnswer}
-                    </Text>
-                  </ScrollView>
-                </View>
-
-                <View style={styles.responseActions}>
-                  <Pressable
-                    onPress={handleAskAgain}
-                    accessibilityRole="button"
-                    accessibilityLabel="Ask another question"
-                    style={({ pressed }) => [
-                      styles.actionPill,
+                  <Text
+                    style={[
+                      styles.langPillText,
                       {
-                        backgroundColor: colors.accent,
-                        opacity: pressed ? 0.85 : 1,
+                        color:
+                          recognitionLanguage === 'en' ? '#FFFFFF' : colors.text,
                       },
                     ]}
                   >
-                    <Ionicons name="chatbubble-outline" size={18} color="#FFFFFF" />
-                    <Text style={styles.actionPillText}>Ask again</Text>
-                  </Pressable>
+                    EN
+                  </Text>
+                </Pressable>
+                <Pressable
+                  onPress={handleSetTamil}
+                  accessibilityRole="radio"
+                  accessibilityLabel="Speak and reply in Tamil"
+                  accessibilityState={{ selected: recognitionLanguage === 'ta' }}
+                  style={[
+                    styles.langPillButton,
+                    {
+                      backgroundColor:
+                        recognitionLanguage === 'ta' ? colors.accentDark : 'transparent',
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.langPillText,
+                      {
+                        color:
+                          recognitionLanguage === 'ta' ? '#FFFFFF' : colors.text,
+                      },
+                    ]}
+                  >
+                    தமிழ்
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
 
-                  {isSpeaking ? (
-                    <Pressable
-                      onPress={handleStopTTS}
-                      accessibilityRole="button"
-                      accessibilityLabel="Stop speaking"
-                      style={({ pressed }) => [
-                        styles.actionPill,
+            {/* HERO — whole card is the mic button */}
+            <Pressable
+              onPress={handleMicPress}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel={heroLabel}
+              accessibilityState={{
+                busy: assistantState === 'processing',
+                selected: assistantState === 'listening',
+              }}
+              style={({ pressed }) => [
+                styles.heroCard,
+                {
+                  borderColor:
+                    assistantState === 'listening' ? colors.gold : colors.border,
+                  shadowColor: colors.accent,
+                  opacity: pressed ? 0.94 : 1,
+                },
+              ]}
+            >
+              <LinearGradient
+                colors={
+                  colors.heroGradient as unknown as readonly [string, string, ...string[]]
+                }
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={StyleSheet.absoluteFill}
+              />
+
+              <View
+                style={[styles.heroAccentStrip, { backgroundColor: colors.gold }]}
+              />
+
+              <View style={styles.heroContent}>
+                {/* Giant mic button inside a halo */}
+                <Halo
+                  size={MIC_SIZE}
+                  active={assistantState === 'listening'}
+                  color={colors.gold}
+                >
+                  <Animated.View
+                    style={[
+                      styles.micButton,
+                      {
+                        backgroundColor:
+                          assistantState === 'listening'
+                            ? colors.accentDark
+                            : colors.accent,
+                        shadowColor: colors.gold,
+                        borderColor:
+                          assistantState === 'listening'
+                            ? colors.gold
+                            : 'rgba(255,255,255,0.2)',
+                        transform: [{ scale: micScale }],
+                      },
+                    ]}
+                  >
+                    {assistantState === 'processing' ? (
+                      <ActivityIndicator size="large" color="#FFFFFF" />
+                    ) : (
+                      <Ionicons
+                        name={micIconName}
+                        size={MIC_SIZE * 0.45}
+                        color="#FFFFFF"
+                      />
+                    )}
+                  </Animated.View>
+                </Halo>
+
+                {/* Big status text */}
+                {statusText ? (
+                  <Text
+                    style={[styles.statusText, { color: '#F5F1FF' }]}
+                    accessibilityLiveRegion="polite"
+                  >
+                    {statusText}
+                  </Text>
+                ) : null}
+
+                {/* User question / partial transcript */}
+                {displayTranscript ? (
+                  <View
+                    style={[
+                      styles.questionBubble,
+                      {
+                        backgroundColor: 'rgba(255,255,255,0.08)',
+                        borderColor: 'rgba(255,255,255,0.18)',
+                      },
+                    ]}
+                  >
+                    <Text style={[styles.questionText, { color: '#F5F1FF' }]}>
+                      {displayTranscript}
+                    </Text>
+                  </View>
+                ) : null}
+
+                {/* AI response */}
+                {assistantState === 'responded' && aiAnswer ? (
+                  <Animated.View
+                    style={[
+                      styles.answerContainer,
+                      {
+                        opacity: answerFade,
+                        transform: [{ translateY: answerTranslate }],
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.answerBubble,
                         {
-                          backgroundColor: colors.error,
-                          opacity: pressed ? 0.85 : 1,
+                          backgroundColor: 'rgba(255,255,255,0.10)',
+                          borderColor: colors.gold,
                         },
                       ]}
                     >
-                      <Ionicons name="stop-circle-outline" size={18} color="#FFFFFF" />
-                      <Text style={styles.actionPillText}>Stop</Text>
+                      <ScrollView
+                        style={styles.answerScroll}
+                        nestedScrollEnabled={true}
+                      >
+                        <Text
+                          style={[styles.answerText, { color: '#F5F1FF' }]}
+                          selectable={true}
+                        >
+                          {aiAnswer}
+                        </Text>
+                      </ScrollView>
+                    </View>
+
+                    <View style={styles.responseActions}>
+                      <Pressable
+                        onPress={handleAskAgain}
+                        accessibilityRole="button"
+                        accessibilityLabel="Ask another question"
+                        style={({ pressed }) => [
+                          styles.actionPill,
+                          {
+                            backgroundColor: colors.gold,
+                            opacity: pressed ? 0.85 : 1,
+                          },
+                        ]}
+                      >
+                        <Ionicons
+                          name="chatbubble-outline"
+                          size={18}
+                          color="#1A0F3D"
+                        />
+                        <Text style={[styles.actionPillText, { color: '#1A0F3D' }]}>
+                          Ask again
+                        </Text>
+                      </Pressable>
+
+                      {isSpeaking ? (
+                        <Pressable
+                          onPress={handleStopTTS}
+                          accessibilityRole="button"
+                          accessibilityLabel="Stop speaking"
+                          style={({ pressed }) => [
+                            styles.actionPill,
+                            {
+                              backgroundColor: colors.error,
+                              opacity: pressed ? 0.85 : 1,
+                            },
+                          ]}
+                        >
+                          <Ionicons
+                            name="stop-circle-outline"
+                            size={18}
+                            color="#FFFFFF"
+                          />
+                          <Text style={styles.actionPillText}>Stop</Text>
+                        </Pressable>
+                      ) : null}
+                    </View>
+                  </Animated.View>
+                ) : null}
+
+                {/* Error */}
+                {assistantState === 'error' ? (
+                  <View style={styles.answerContainer}>
+                    <Text style={[styles.errorText, { color: '#FCA5A5' }]}>
+                      {aiError || 'Something went wrong. Please try again.'}
+                    </Text>
+                    <Pressable
+                      onPress={handleAskAgain}
+                      accessibilityRole="button"
+                      accessibilityLabel="Try again"
+                      style={({ pressed }) => [
+                        styles.actionPill,
+                        {
+                          backgroundColor: colors.gold,
+                          opacity: pressed ? 0.85 : 1,
+                          alignSelf: 'center',
+                          marginTop: 12,
+                        },
+                      ]}
+                    >
+                      <Ionicons name="refresh-outline" size={18} color="#1A0F3D" />
+                      <Text style={[styles.actionPillText, { color: '#1A0F3D' }]}>
+                        Try again
+                      </Text>
                     </Pressable>
-                  ) : null}
-                </View>
+                  </View>
+                ) : null}
               </View>
-            ) : null}
+            </Pressable>
 
-            {/* Error */}
-            {assistantState === 'error' ? (
-              <View style={styles.answerContainer}>
-                <Text style={[styles.errorText, { color: colors.error }]}>
-                  {aiError || 'Something went wrong. Please try again.'}
-                </Text>
-                <Pressable
-                  onPress={handleAskAgain}
-                  accessibilityRole="button"
-                  accessibilityLabel="Try again"
-                  style={({ pressed }) => [
-                    styles.actionPill,
-                    {
-                      backgroundColor: colors.accent,
-                      opacity: pressed ? 0.85 : 1,
-                      alignSelf: 'center',
-                      marginTop: 12,
-                    },
-                  ]}
+            {/* Verse list returned from the AI */}
+            {assistantState === 'responded' && aiVerses.length > 0 ? (
+              <Animated.View
+                style={[
+                  styles.versesSection,
+                  {
+                    opacity: answerFade,
+                    transform: [{ translateY: answerTranslate }],
+                  },
+                ]}
+              >
+                <Text
+                  style={[styles.versesTitle, { color: colors.gold }]}
+                  accessibilityRole="header"
                 >
-                  <Ionicons name="refresh-outline" size={18} color="#FFFFFF" />
-                  <Text style={styles.actionPillText}>Try again</Text>
-                </Pressable>
-              </View>
-            ) : null}
-          </View>
-        </Pressable>
+                  {t('home.relevantVerses', {
+                    defaultValue: 'Relevant verses',
+                  })}
+                </Text>
+                {aiVerses.map((v, idx) => {
+                  const display =
+                    answerLanguage === 'ta'
+                      ? v.tamilText || v.englishText
+                      : v.englishText || v.tamilText;
+                  return (
+                    <View
+                      key={`${v.reference}-${idx}`}
+                      style={[
+                        styles.verseListCard,
+                        {
+                          backgroundColor: colors.cardElevated,
+                          borderColor: colors.border,
+                        },
+                      ]}
+                    >
+                      <Pressable
+                        onPress={() => handleVersePress(v.reference)}
+                        accessibilityRole="button"
+                        accessibilityLabel={`${v.reference}. ${display}`}
+                        accessibilityHint="Double tap to open the verse"
+                        style={({ pressed }) => [
+                          styles.verseCardBody,
+                          { opacity: pressed ? 0.85 : 1 },
+                        ]}
+                      >
+                        <Text
+                          style={[styles.verseReference, { color: colors.gold }]}
+                        >
+                          {v.reference}
+                        </Text>
+                        {display ? (
+                          <Text
+                            style={[styles.verseText, { color: colors.text }]}
+                            numberOfLines={4}
+                          >
+                            {display}
+                          </Text>
+                        ) : null}
+                        {v.snippet ? (
+                          <Text
+                            style={[
+                              styles.verseSnippet,
+                              { color: colors.textSecondary },
+                            ]}
+                            numberOfLines={2}
+                          >
+                            {v.snippet}
+                          </Text>
+                        ) : null}
+                      </Pressable>
 
-        {/* Verse list returned from the AI — only shown after a response */}
-        {assistantState === 'responded' && aiVerses.length > 0 ? (
-          <View style={styles.versesSection}>
+                      {/* Inline favorite heart — one-tap save */}
+                      <View style={styles.verseFavCorner}>
+                        <FavoriteButton
+                          reference={v.reference}
+                          englishText={v.englishText}
+                          tamilText={v.tamilText}
+                          size={24}
+                        />
+                      </View>
+                    </View>
+                  );
+                })}
+              </Animated.View>
+            ) : null}
+
+            {/* Voice command hints */}
+            {assistantState === 'idle' ? (
+              <Text
+                style={[styles.voiceHints, { color: colors.textSecondary }]}
+                accessibilityRole="text"
+              >
+                {t('home.voiceHints', {
+                  defaultValue:
+                    'Try saying: "Verses about love", "What does the Bible say about hope", "Open favorites", "Speak in Tamil", or "Repeat".',
+                })}
+              </Text>
+            ) : null}
+
+            {/* Daily Verse */}
             <Text
-              style={[styles.versesTitle, { color: colors.text }]}
+              style={[styles.sectionTitle, { color: colors.gold }]}
               accessibilityRole="header"
             >
-              {t('home.relevantVerses', {
-                defaultValue: 'Relevant verses',
-              })}
+              {t('home.dailyVerse')}
             </Text>
-            {aiVerses.map((v, idx) => {
-              const display =
-                answerLanguage === 'ta'
-                  ? v.tamilText || v.englishText
-                  : v.englishText || v.tamilText;
-              return (
+
+            {dailyLoading ? (
+              <ActivityIndicator
+                color={colors.accent}
+                style={{ marginVertical: 16 }}
+              />
+            ) : dailyVerse ? (
+              <View
+                style={[
+                  styles.dailyVerseCard,
+                  {
+                    backgroundColor: colors.cardElevated,
+                    borderColor: colors.border,
+                  },
+                ]}
+              >
                 <Pressable
-                  key={`${v.reference}-${idx}`}
-                  onPress={() => handleVersePress(v.reference)}
+                  onPress={handleDailyVersePress}
                   accessibilityRole="button"
-                  accessibilityLabel={`${v.reference}. ${display}`}
-                  accessibilityHint="Double tap to open the verse"
+                  accessibilityLabel={`${t('home.dailyVerse')}: ${dailyVerse.reference}. ${verseText}`}
+                  accessibilityHint="Double tap to view the full verse"
                   style={({ pressed }) => [
-                    styles.verseListCard,
-                    {
-                      backgroundColor: colors.card,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.85 : 1,
-                    },
+                    styles.dailyVerseBody,
+                    { opacity: pressed ? 0.88 : 1 },
                   ]}
                 >
-                  <Text style={[styles.verseReference, { color: colors.accent }]}>
-                    {v.reference}
+                  <Text style={[styles.verseReference, { color: colors.gold }]}>
+                    {dailyVerse.reference}
                   </Text>
-                  {display ? (
-                    <Text
-                      style={[styles.verseText, { color: colors.text }]}
-                      numberOfLines={3}
-                    >
-                      {display}
-                    </Text>
-                  ) : null}
-                  {v.snippet ? (
-                    <Text
-                      style={[
-                        styles.verseSnippet,
-                        { color: colors.textSecondary },
-                      ]}
-                      numberOfLines={2}
-                    >
-                      {v.snippet}
-                    </Text>
-                  ) : null}
+                  <Text
+                    style={[styles.verseText, { color: colors.text }]}
+                    numberOfLines={3}
+                  >
+                    {verseText}
+                  </Text>
+                  <View style={styles.verseArrow}>
+                    <Ionicons
+                      name="chevron-forward"
+                      size={20}
+                      color={colors.textSecondary}
+                    />
+                  </View>
                 </Pressable>
-              );
-            })}
-          </View>
-        ) : null}
+                <View style={styles.verseFavCorner}>
+                  <FavoriteButton
+                    reference={dailyVerse.reference}
+                    englishText={dailyVerse.englishText}
+                    tamilText={dailyVerse.tamilText}
+                    size={24}
+                  />
+                </View>
+              </View>
+            ) : (
+              <Text style={[styles.noVerse, { color: colors.textSecondary }]}>
+                {t('home.noDailyVerse', { defaultValue: 'No verse available' })}
+              </Text>
+            )}
 
-        {/* Voice command hints for visually impaired users */}
-        {assistantState === 'idle' ? (
-          <Text
-            style={[styles.voiceHints, { color: colors.textSecondary }]}
-            accessibilityRole="text"
-          >
-            {t('home.voiceHints', {
-              defaultValue:
-                'Try saying: "Verses about love", "What does the Bible say about hope", "Open favorites", "Speak in Tamil", or "Repeat".',
-            })}
-          </Text>
-        ) : null}
-
-        {/* Daily Verse */}
-        <Text
-          style={[styles.sectionTitle, { color: colors.text }]}
-          accessibilityRole="header"
-        >
-          {t('home.dailyVerse')}
-        </Text>
-
-        {dailyLoading ? (
-          <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
-        ) : dailyVerse ? (
-          <Pressable
-            onPress={handleDailyVersePress}
-            accessibilityRole="button"
-            accessibilityLabel={`${t('home.dailyVerse')}: ${dailyVerse.reference}. ${verseText}`}
-            accessibilityHint="Double tap to view the full verse"
-            style={({ pressed }) => [
-              styles.dailyVerseCard,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Text style={[styles.verseReference, { color: colors.accent }]}>
-              {dailyVerse.reference}
-            </Text>
-            <Text
-              style={[styles.verseText, { color: colors.text }]}
-              numberOfLines={3}
-            >
-              {verseText}
-            </Text>
-            <View style={styles.verseArrow}>
-              <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+            {/* Quick actions */}
+            <View style={styles.quickActions}>
+              <Pressable
+                onPress={handleFavoritesPress}
+                accessibilityRole="button"
+                accessibilityLabel="Open favorites"
+                style={({ pressed }) => [
+                  styles.quickActionPill,
+                  {
+                    backgroundColor: colors.cardElevated,
+                    borderColor: colors.border,
+                    opacity: pressed ? 0.85 : 1,
+                  },
+                ]}
+              >
+                <Ionicons name="heart" size={20} color={colors.gold} />
+                <Text style={[styles.quickActionText, { color: colors.text }]}>
+                  {t('home.favorites', { defaultValue: 'Favorites' })}
+                </Text>
+              </Pressable>
             </View>
-          </Pressable>
-        ) : (
-          <Text style={[styles.noVerse, { color: colors.textSecondary }]}>
-            {t('home.noDailyVerse', { defaultValue: 'No verse available' })}
-          </Text>
-        )}
-
-        {/* Quick Actions */}
-        <View style={styles.quickActions}>
-          <Pressable
-            onPress={handleFavoritesPress}
-            accessibilityRole="button"
-            accessibilityLabel="Open favorites"
-            style={({ pressed }) => [
-              styles.quickActionPill,
-              {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
-                opacity: pressed ? 0.85 : 1,
-              },
-            ]}
-          >
-            <Ionicons name="heart" size={20} color={colors.accent} />
-            <Text style={[styles.quickActionText, { color: colors.text }]}>
-              {t('home.favorites', { defaultValue: 'Favorites' })}
-            </Text>
-          </Pressable>
-        </View>
-      </ScrollView>
+          </ScrollView>
+        </Animated.View>
+      </SafeAreaView>
 
       {/* Mini playback bar */}
       {isSpeaking && assistantState !== 'responded' ? (
@@ -661,7 +838,7 @@ export function HomeScreen() {
           />
         </View>
       ) : null}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -681,12 +858,13 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   appName: {
-    fontSize: 28,
-    fontWeight: '700',
+    fontSize: 30,
+    fontWeight: '800',
     marginBottom: 2,
+    letterSpacing: 0.3,
   },
   greeting: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '400',
   },
   langPill: {
@@ -709,18 +887,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   heroCard: {
-    borderRadius: 24,
-    borderWidth: 2,
+    borderRadius: 28,
+    borderWidth: 1.5,
     overflow: 'hidden',
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 16,
-    elevation: 8,
+    marginBottom: 20,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 12,
   },
   heroAccentStrip: {
-    height: 6,
+    height: 4,
     width: '100%',
+    opacity: 0.85,
   },
   heroContent: {
     padding: 28,
@@ -734,16 +913,17 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginBottom: 20,
     borderWidth: 4,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 12,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.55,
+    shadowRadius: 22,
+    elevation: 16,
   },
   statusText: {
     fontSize: 22,
-    fontWeight: '600',
+    fontWeight: '700',
     marginBottom: 12,
     textAlign: 'center',
+    letterSpacing: 0.3,
   },
   questionBubble: {
     width: '100%',
@@ -794,7 +974,7 @@ const styles = StyleSheet.create({
   actionPillText: {
     color: '#FFFFFF',
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   errorText: {
     fontSize: 15,
@@ -805,22 +985,33 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   versesTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 10,
+    fontSize: 20,
+    fontWeight: '800',
+    marginBottom: 12,
+    letterSpacing: 0.3,
   },
   verseListCard: {
-    padding: 14,
-    borderRadius: 14,
+    borderRadius: 18,
     borderWidth: 1,
-    marginBottom: 10,
+    marginBottom: 12,
     minHeight: MIN_TOUCH_SIZE,
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  verseCardBody: {
+    padding: 16,
+    paddingRight: 56,
   },
   verseSnippet: {
     fontSize: 13,
     lineHeight: 18,
     marginTop: 6,
     fontStyle: 'italic',
+  },
+  verseFavCorner: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
   },
   voiceHints: {
     fontSize: 13,
@@ -831,22 +1022,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 12,
+    fontSize: 22,
+    fontWeight: '800',
+    marginBottom: 14,
+    letterSpacing: 0.3,
   },
   dailyVerseCard: {
-    padding: 16,
-    borderRadius: 16,
+    borderRadius: 18,
     borderWidth: 1,
     marginBottom: 24,
     minHeight: MIN_TOUCH_SIZE,
-    flexDirection: 'column',
+    overflow: 'hidden',
+    position: 'relative',
+  },
+  dailyVerseBody: {
+    padding: 18,
+    paddingRight: 56,
   },
   verseReference: {
     fontSize: 15,
-    fontWeight: '700',
+    fontWeight: '800',
     marginBottom: 8,
+    letterSpacing: 0.3,
   },
   verseText: {
     fontSize: 16,
@@ -880,7 +1077,7 @@ const styles = StyleSheet.create({
   },
   quickActionText: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '700',
   },
   miniBar: {
     flexDirection: 'row',

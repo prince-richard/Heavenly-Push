@@ -11,10 +11,15 @@ import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { DatabaseProvider } from '@/contexts/DatabaseContext';
 import { AuthScreen } from '@/app/screens/AuthScreen';
+import { useUserPreferenceSync } from '@/hooks/useUserPreferenceSync';
 
 export default function App() {
   const highContrastMode = useSettingsStore((s) => s.highContrastMode);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+
+  // Restore per-user language/theme/speed when a user signs in,
+  // and save changes back under their key.
+  useUserPreferenceSync();
 
   if (!isAuthenticated) {
     return (

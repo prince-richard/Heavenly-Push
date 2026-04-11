@@ -18,53 +18,77 @@ export interface ThemeColors {
   placeholder: string;
   gradientStart: string;
   gradientEnd: string;
+  /** Soft halo color used behind hero elements (matches accent at low alpha). */
+  halo: string;
+  /** Warm gold reserved for verse references and divine-touch accents. */
+  gold: string;
+  /** Three-stop gradient used for the hero card background. */
+  heroGradient: readonly [string, string, string];
+  /** Two-stop gradient used for the screen backdrop. */
+  backdropGradient: readonly [string, string];
 }
 
+/**
+ * "Heavenly night" — deep cosmic indigo melting into violet, with warm
+ * gold accents reminiscent of starlight on cathedral glass.
+ */
 export const darkPurple: ThemeColors = {
-  background: '#0F0A1F',
-  text: '#F0EDFF',
-  textSecondary: '#B8B0D6',
-  accent: '#A78BFA',
-  accentLight: '#C4B5FD',
+  background: '#08061A',
+  text: '#F5F1FF',
+  textSecondary: '#B6ABDB',
+  accent: '#C4B5FD',
+  accentLight: '#E9DEFF',
   accentDark: '#7C3AED',
-  link: '#C4B5FD',
-  error: '#F87171',
-  success: '#4ADE80',
-  border: '#2D2550',
-  card: '#1A1333',
-  cardElevated: '#241C42',
-  tabBar: '#0F0A1F',
-  tabBarActive: '#A78BFA',
+  link: '#E9DEFF',
+  error: '#FB7185',
+  success: '#5EE7A8',
+  border: '#2A1F55',
+  card: '#160F38',
+  cardElevated: '#1E1647',
+  tabBar: '#0A0722',
+  tabBarActive: '#FCD34D', // gold for active tab — feels divine
   tabBarInactive: '#6B5F8A',
-  inputBackground: '#1A1333',
+  inputBackground: '#160F38',
   placeholder: '#6B5F8A',
-  gradientStart: '#7C3AED',
+  gradientStart: '#3A1F8C',
   gradientEnd: '#A78BFA',
+  halo: 'rgba(196, 181, 253, 0.18)',
+  gold: '#FCD34D',
+  heroGradient: ['#1E1247', '#3A1F8C', '#5B21B6'] as const,
+  backdropGradient: ['#08061A', '#160F38'] as const,
 };
 
+/**
+ * "Heavenly dawn" — soft cream sky with violet edges and warm gold,
+ * for users who prefer a brighter palette.
+ */
 export const lightPurple: ThemeColors = {
-  background: '#FAF8FF',
-  text: '#1A1030',
+  background: '#FBF8FF',
+  text: '#1A0F3D',
   textSecondary: '#5B5278',
   accent: '#7C3AED',
   accentLight: '#EDE9FE',
-  accentDark: '#5B21B6',
+  accentDark: '#4C1D95',
   link: '#6D28D9',
   error: '#DC2626',
   success: '#16A34A',
   border: '#E4DCF5',
-  card: '#F3EEFF',
+  card: '#F5EFFF',
   cardElevated: '#FFFFFF',
   tabBar: '#FFFFFF',
-  tabBarActive: '#7C3AED',
+  tabBarActive: '#B45309', // warm gold
   tabBarInactive: '#9CA3AF',
-  inputBackground: '#F3EEFF',
+  inputBackground: '#F5EFFF',
   placeholder: '#9CA3AF',
   gradientStart: '#7C3AED',
-  gradientEnd: '#A78BFA',
+  gradientEnd: '#C4B5FD',
+  halo: 'rgba(124, 58, 237, 0.12)',
+  gold: '#B45309',
+  heroGradient: ['#FFFFFF', '#F5EFFF', '#EDE9FE'] as const,
+  backdropGradient: ['#FBF8FF', '#F5EFFF'] as const,
 };
 
-// Keep old names as aliases for backward compatibility
+// Backwards-compatible aliases
 export const darkHighContrast = darkPurple;
 export const lightHighContrast = lightPurple;
 
