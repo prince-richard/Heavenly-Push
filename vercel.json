@@ -7,6 +7,7 @@
       "includeFiles": "server/**"
     }
   },
+  "uncompressedLayerBytes": 4000000000,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
