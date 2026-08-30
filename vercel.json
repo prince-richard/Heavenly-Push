@@ -1,13 +1,13 @@
 {
   "buildCommand": "npx expo export --platform web",
   "outputDirectory": "dist",
-  "installCommand": "npm install && cd server && npm install",
+  "installCommand": "npm install",
   "functions": {
     "api/index.ts": {
-      "includeFiles": "server/**"
+      "maxDuration": 30,
+      "excludeFiles": "{node_modules/@expo/**,node_modules/expo/**,node_modules/react-native/**,node_modules/@react-native/**,node_modules/playwright-core/**,node_modules/@playwright/**}"
     }
   },
-  "uncompressedLayerBytes": 4000000000,
   "rewrites": [
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/((?!api/).*)", "destination": "/index.html" }
