@@ -34,7 +34,7 @@ const initialState: VoiceState = {
   partialTranscript: '',
   error: null,
   voiceMode: false,
-  recognitionLanguage: 'en',
+  recognitionLanguage: 'ta',
 };
 
 export const useVoiceStore = create<VoiceStore>()((set) => ({

@@ -43,3 +43,8 @@ server/dist/
 # generated native folders
 /ios
 /android
+
+# playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

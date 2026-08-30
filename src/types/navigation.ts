@@ -2,6 +2,7 @@ export type RootStackParamList = {
   Main: undefined;
   VerseDetail: { verseId?: string; reference?: string; autoPlay?: boolean };
   PlanDetail: { planId: string };
+  VoiceCommands: undefined;
 };
 
 export type TabParamList = {

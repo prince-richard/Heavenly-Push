@@ -57,6 +57,7 @@ class WebSpeechProviderImpl implements SpeechRecognitionAdapter {
   private partialCallback: ((text: string) => void) | null = null;
   private finalCallback: ((text: string) => void) | null = null;
   private errorCallback: ((error: string) => void) | null = null;
+  private endCallback: (() => void) | null = null;
 
   async isAvailable(): Promise<boolean> {
     return getRecognitionConstructor() !== undefined;
@@ -112,7 +113,9 @@ class WebSpeechProviderImpl implements SpeechRecognitionAdapter {
     };
 
     this.recognition.onend = () => {
-      // Session ended naturally — no action needed
+      if (this.endCallback) {
+        this.endCallback();
+      }
     };
 
     try {
@@ -159,6 +162,13 @@ class WebSpeechProviderImpl implements SpeechRecognitionAdapter {
     this.errorCallback = callback;
     return () => {
       this.errorCallback = null;
+    };
+  }
+
+  onEnd(callback: () => void): () => void {
+    this.endCallback = callback;
+    return () => {
+      this.endCallback = null;
     };
   }
 

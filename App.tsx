@@ -12,6 +12,7 @@ import { useAuthStore } from '@/stores/useAuthStore';
 import { DatabaseProvider } from '@/contexts/DatabaseContext';
 import { AuthScreen } from '@/app/screens/AuthScreen';
 import { useUserPreferenceSync } from '@/hooks/useUserPreferenceSync';
+import { GlobalVoiceProvider } from '@/components/voice/GlobalVoiceProvider';
 
 export default function App() {
   const highContrastMode = useSettingsStore((s) => s.highContrastMode);
@@ -34,7 +35,9 @@ export default function App() {
     <SafeAreaProvider>
       <DatabaseProvider>
         <NavigationContainer ref={navigationRef} linking={linking}>
-          <RootNavigator />
+          <GlobalVoiceProvider>
+            <RootNavigator />
+          </GlobalVoiceProvider>
           <StatusBar style={highContrastMode ? 'light' : 'dark'} />
         </NavigationContainer>
       </DatabaseProvider>

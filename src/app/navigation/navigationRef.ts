@@ -25,3 +25,8 @@ export function navigateToVerse(params: {
   if (!navigationRef.isReady()) return;
   navigationRef.navigate('VerseDetail', params);
 }
+
+export function navigateToVoiceCommands(): void {
+  if (!navigationRef.isReady()) return;
+  navigationRef.navigate('VoiceCommands');
+}

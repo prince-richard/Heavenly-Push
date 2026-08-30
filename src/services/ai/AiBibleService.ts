@@ -154,6 +154,24 @@ export async function getVerseByReference(
   return res.json();
 }
 
+export interface HealthResponse {
+  status: 'ok' | 'degraded' | 'error';
+  providers: Record<string, boolean>;
+}
+
+export async function checkAiHealth(): Promise<HealthResponse> {
+  try {
+    const res = await fetch(`${API_BASE}/api/ai-bible/health`, {
+      method: 'GET',
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return { status: 'error', providers: {} };
+    return res.json();
+  } catch {
+    return { status: 'error', providers: {} };
+  }
+}
+
 export async function explainVerse(request: ExplainRequest): Promise<ExplainResponse> {
   const res = await fetch(`${API_BASE}/api/ai-bible/explain`, {
     method: 'POST',

@@ -93,6 +93,15 @@ class NativeSpeechProviderImpl implements SpeechRecognitionAdapter {
       Voice.onSpeechError = undefined as unknown as (e: SpeechErrorEvent) => void;
     };
   }
+
+  onEnd(callback: () => void): () => void {
+    Voice.onSpeechEnd = () => {
+      callback();
+    };
+    return () => {
+      Voice.onSpeechEnd = undefined as unknown as (e: unknown) => void;
+    };
+  }
 }
 
 export const nativeSpeechProvider = new NativeSpeechProviderImpl();

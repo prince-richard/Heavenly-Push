@@ -24,7 +24,7 @@ export const useSettingsStore = create<SettingsStore>()(
   persist(
     (set) => ({
       // Default values
-      primaryLanguage: 'en',
+      primaryLanguage: 'ta',
       searchLanguageMode: 'auto',
       ttsSpeed: DEFAULT_TTS_SPEED,
       shakeToSpeakEnabled: true,

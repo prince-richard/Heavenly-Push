@@ -7,7 +7,7 @@ import { useVoiceStore } from '@/stores/useVoiceStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useSearchStore } from '@/stores/useSearchStore';
 import { usePlaybackStore } from '@/stores/usePlaybackStore';
-import { navigateToTab } from '@/app/navigation/navigationRef';
+import { navigateToTab, navigateToVoiceCommands } from '@/app/navigation/navigationRef';
 import { askAnything } from '@/services/ai/AiBibleService';
 import {
   TTS_SPEED_STEP,
@@ -176,11 +176,35 @@ export function useVoiceController() {
           navigateToTab('Settings');
           break;
 
+        case 'openVoiceHelp':
+        case 'help':
+          navigateToVoiceCommands();
+          break;
+
+        case 'saveVerse':
+          // Alias for bookmark — handled by screen context
+          break;
+
+        case 'listSaved':
+          navigateToTab('Favorites');
+          break;
+
+        case 'readSaved':
+          // Navigate to favorites — screen handles TTS playback
+          navigateToTab('Favorites');
+          break;
+
+        case 'nextVerse':
+        case 'previousVerse':
+          // Handled by screen context (VerseDetail)
+          break;
+
+        case 'repeatFrom':
+        case 'repeatVerse':
+          // These carry args — handled by HomeScreen context
+          break;
+
         // Commands that need screen context to execute:
-        // read, readContext, bookmark, share, recordReflection,
-        // startMemorization, dailyVerse, searchInTamil, searchInEnglish
-        // These remain exposed via the transcript/parsed command for
-        // the UI layer to handle.
         case 'searchInTamil':
         case 'searchInEnglish':
         case 'read':
@@ -256,6 +280,14 @@ export function useVoiceController() {
         speechService.onError((err) => {
           if (mountedRef.current) {
             setError(err);
+            setListening(false);
+          }
+        }),
+      );
+
+      cleanupFns.current.push(
+        speechService.onEnd(() => {
+          if (mountedRef.current) {
             setListening(false);
           }
         }),

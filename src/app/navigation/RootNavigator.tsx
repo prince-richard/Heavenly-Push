@@ -5,6 +5,7 @@ import type { RootStackParamList } from '@/types/navigation';
 import { TabNavigator } from './TabNavigator';
 import { VerseDetailScreen } from '@/app/screens/VerseDetailScreen';
 import { PlanDetailScreen } from '@/app/screens/PlanDetailScreen';
+import { VoiceCommandsScreen } from '@/app/screens/VoiceCommandsScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -47,6 +48,14 @@ export function RootNavigator() {
         options={{
           headerShown: true,
           title: 'Plan',
+        }}
+      />
+      <Stack.Screen
+        name="VoiceCommands"
+        component={VoiceCommandsScreen}
+        options={{
+          headerShown: true,
+          title: 'Voice Commands',
         }}
       />
     </Stack.Navigator>
