@@ -12,6 +12,11 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
+import {
+  GOOGLE_OAUTH_REDIRECT_PATH,
+  getGoogleWebClientId,
+  getGoogleWebRedirectUri,
+} from '@/constants/auth';
 
 function signInFromGoogleIdToken(
   idToken: string,
@@ -47,7 +52,8 @@ export function AuthScreen() {
     const params = new URLSearchParams(raw.startsWith('#') ? raw.slice(1) : raw);
     const stripHashFromUrl = () => {
       const { pathname, search } = window.location;
-      const next = pathname === '/oauth' ? '/' : `${pathname}${search}`;
+      const next =
+        pathname === GOOGLE_OAUTH_REDIRECT_PATH ? '/' : `${pathname}${search}`;
       window.history.replaceState(null, '', next);
     };
 
@@ -79,22 +85,27 @@ export function AuthScreen() {
     setLoading(true);
     setError(null);
     try {
-      const { makeRedirectUri } = await import('expo-auth-session');
-
-      // Must match Google Cloud Console → OAuth 2.0 Web client → Authorized redirect URIs (exact string).
-      // Dev (Expo web is usually port 8081): http://localhost:8081/oauth and http://127.0.0.1:8081/oauth
-      // Production: https://your-domain.com/oauth
-      const redirectUri = makeRedirectUri({
-        path: 'oauth',
-        preferLocalhost: Platform.OS === 'web',
-      });
-
       const clientId = Platform.select({
-        web: '19249620763-4brri96gmareiiu0q80888kovb945cde.apps.googleusercontent.com',
+        web: getGoogleWebClientId(),
         ios: 'YOUR_IOS_CLIENT_ID.apps.googleusercontent.com',
         android: 'YOUR_ANDROID_CLIENT_ID.apps.googleusercontent.com',
         default: '',
       });
+
+      const redirectUri =
+        Platform.OS === 'web'
+          ? getGoogleWebRedirectUri()
+          : (
+              await import('expo-auth-session')
+            ).makeRedirectUri({
+              path: GOOGLE_OAUTH_REDIRECT_PATH.replace(/^\//, ''),
+              scheme: 'heavenlypush',
+            });
+
+      if (!redirectUri || !clientId) {
+        setError('Google sign in is not configured for this platform.');
+        return;
+      }
 
       const authUrl =
         `https://accounts.google.com/o/oauth2/v2/auth?` +
