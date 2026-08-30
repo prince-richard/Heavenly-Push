@@ -8,6 +8,7 @@ import {
   AccessibilityInfo,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -60,13 +61,13 @@ export function FavoritesScreen() {
             style={({ pressed }) => [
               styles.card,
               {
-                backgroundColor: colors.card,
-                borderColor: colors.border,
+                backgroundColor: colors.glass,
+                borderColor: colors.glassBorder,
                 opacity: pressed ? 0.85 : 1,
               },
             ]}
           >
-            <Text style={[styles.reference, { color: colors.accent }]}>
+            <Text style={[styles.reference, { color: colors.gold }]}>
               {item.reference}
             </Text>
             {text ? (
@@ -90,35 +91,40 @@ export function FavoritesScreen() {
   );
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={['top']}
-    >
-      <View style={styles.container}>
-        <Text
-          style={[styles.title, { color: colors.text }]}
-          accessibilityRole="header"
-        >
-          {t('favorites.title')}
-        </Text>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <LinearGradient
+        colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <View style={styles.container}>
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            accessibilityRole="header"
+          >
+            {t('favorites.title')}
+          </Text>
 
-        {favorites.length === 0 ? (
-          <EmptyState
-            icon="heart-outline"
-            title={t('favorites.empty')}
-            subtitle={t('favorites.emptyHint')}
-          />
-        ) : (
-          <FlatList
-            data={favorites}
-            keyExtractor={(item) => item.reference}
-            renderItem={renderItem}
-            contentContainerStyle={styles.list}
-            showsVerticalScrollIndicator={false}
-          />
-        )}
-      </View>
-    </SafeAreaView>
+          {favorites.length === 0 ? (
+            <EmptyState
+              icon="heart-outline"
+              title={t('favorites.empty')}
+              subtitle={t('favorites.emptyHint')}
+            />
+          ) : (
+            <FlatList
+              data={favorites}
+              keyExtractor={(item) => item.reference}
+              renderItem={renderItem}
+              contentContainerStyle={styles.list}
+              showsVerticalScrollIndicator={false}
+            />
+          )}
+        </View>
+      </SafeAreaView>
+    </View>
   );
 }
 
@@ -131,6 +137,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 16,
+    letterSpacing: 0.3,
   },
   list: {
     paddingBottom: 16,
@@ -144,7 +151,7 @@ const styles = StyleSheet.create({
   card: {
     flex: 1,
     padding: 16,
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
     minHeight: MIN_TOUCH_SIZE,
   },
@@ -152,6 +159,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     marginBottom: 6,
+    letterSpacing: 0.3,
   },
   text: {
     fontSize: 16,

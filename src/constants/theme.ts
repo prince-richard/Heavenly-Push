@@ -18,74 +18,83 @@ export interface ThemeColors {
   placeholder: string;
   gradientStart: string;
   gradientEnd: string;
-  /** Soft halo color used behind hero elements (matches accent at low alpha). */
   halo: string;
-  /** Warm gold reserved for verse references and divine-touch accents. */
   gold: string;
-  /** Three-stop gradient used for the hero card background. */
   heroGradient: readonly [string, string, string];
-  /** Two-stop gradient used for the screen backdrop. */
   backdropGradient: readonly [string, string];
+  glass: string;
+  glassBorder: string;
+  angelGlow: string;
+  chatUser: string;
+  chatAssistant: string;
 }
 
 /**
- * "Heavenly night" — deep cosmic indigo melting into violet, with warm
- * gold accents reminiscent of starlight on cathedral glass.
+ * Dark theme — Rich purple background with white text and violet accents.
  */
 export const darkPurple: ThemeColors = {
-  background: '#08061A',
-  text: '#F5F1FF',
-  textSecondary: '#B6ABDB',
-  accent: '#C4B5FD',
-  accentLight: '#E9DEFF',
-  accentDark: '#7C3AED',
-  link: '#E9DEFF',
-  error: '#FB7185',
-  success: '#5EE7A8',
-  border: '#2A1F55',
-  card: '#160F38',
-  cardElevated: '#1E1647',
-  tabBar: '#0A0722',
-  tabBarActive: '#FCD34D', // gold for active tab — feels divine
-  tabBarInactive: '#6B5F8A',
-  inputBackground: '#160F38',
-  placeholder: '#6B5F8A',
-  gradientStart: '#3A1F8C',
-  gradientEnd: '#A78BFA',
-  halo: 'rgba(196, 181, 253, 0.18)',
-  gold: '#FCD34D',
-  heroGradient: ['#1E1247', '#3A1F8C', '#5B21B6'] as const,
-  backdropGradient: ['#08061A', '#160F38'] as const,
+  background: '#1A0533',
+  text: '#FFFFFF',
+  textSecondary: '#B8A5D6',
+  accent: '#A855F7',
+  accentLight: '#D8B4FE',
+  accentDark: '#7E22CE',
+  link: '#C084FC',
+  error: '#F87171',
+  success: '#4ADE80',
+  border: 'rgba(168, 85, 247, 0.2)',
+  card: 'rgba(255, 255, 255, 0.06)',
+  cardElevated: 'rgba(255, 255, 255, 0.1)',
+  tabBar: 'rgba(26, 5, 51, 0.95)',
+  tabBarActive: '#A855F7',
+  tabBarInactive: 'rgba(184, 165, 214, 0.5)',
+  inputBackground: 'rgba(255, 255, 255, 0.08)',
+  placeholder: 'rgba(184, 165, 214, 0.6)',
+  gradientStart: '#2D0B56',
+  gradientEnd: '#A855F7',
+  halo: 'rgba(168, 85, 247, 0.25)',
+  gold: '#D8B4FE',
+  heroGradient: ['rgba(45, 11, 86, 0.9)', 'rgba(126, 34, 206, 0.4)', 'rgba(168, 85, 247, 0.15)'] as const,
+  backdropGradient: ['#1A0533', '#2D0B56'] as const,
+  glass: 'rgba(255, 255, 255, 0.07)',
+  glassBorder: 'rgba(255, 255, 255, 0.12)',
+  angelGlow: 'rgba(168, 85, 247, 0.3)',
+  chatUser: 'rgba(168, 85, 247, 0.2)',
+  chatAssistant: 'rgba(255, 255, 255, 0.06)',
 };
 
 /**
- * "Heavenly dawn" — soft cream sky with violet edges and warm gold,
- * for users who prefer a brighter palette.
+ * Light theme — Clean white background with purple accents.
  */
 export const lightPurple: ThemeColors = {
-  background: '#FBF8FF',
-  text: '#1A0F3D',
-  textSecondary: '#5B5278',
+  background: '#FFFFFF',
+  text: '#1E1033',
+  textSecondary: '#6B5B8A',
   accent: '#7C3AED',
   accentLight: '#EDE9FE',
-  accentDark: '#4C1D95',
+  accentDark: '#5B21B6',
   link: '#6D28D9',
   error: '#DC2626',
   success: '#16A34A',
-  border: '#E4DCF5',
-  card: '#F5EFFF',
+  border: 'rgba(124, 58, 237, 0.12)',
+  card: '#F5F0FF',
   cardElevated: '#FFFFFF',
   tabBar: '#FFFFFF',
-  tabBarActive: '#B45309', // warm gold
-  tabBarInactive: '#9CA3AF',
-  inputBackground: '#F5EFFF',
-  placeholder: '#9CA3AF',
+  tabBarActive: '#7C3AED',
+  tabBarInactive: '#A3A3A3',
+  inputBackground: '#F5F0FF',
+  placeholder: '#A3A3A3',
   gradientStart: '#7C3AED',
-  gradientEnd: '#C4B5FD',
-  halo: 'rgba(124, 58, 237, 0.12)',
-  gold: '#B45309',
-  heroGradient: ['#FFFFFF', '#F5EFFF', '#EDE9FE'] as const,
-  backdropGradient: ['#FBF8FF', '#F5EFFF'] as const,
+  gradientEnd: '#DDD6FE',
+  halo: 'rgba(124, 58, 237, 0.1)',
+  gold: '#7C3AED',
+  heroGradient: ['#FFFFFF', '#F5F0FF', '#EDE9FE'] as const,
+  backdropGradient: ['#FFFFFF', '#F5F0FF'] as const,
+  glass: '#F5F0FF',
+  glassBorder: 'rgba(124, 58, 237, 0.12)',
+  angelGlow: 'rgba(124, 58, 237, 0.15)',
+  chatUser: 'rgba(124, 58, 237, 0.1)',
+  chatAssistant: '#F5F0FF',
 };
 
 // Backwards-compatible aliases

@@ -1,5 +1,12 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Pressable, StyleSheet, AccessibilityInfo } from 'react-native';
+import {
+  View,
+  Text,
+  Pressable,
+  StyleSheet,
+  AccessibilityInfo,
+  Dimensions,
+} from 'react-native';
 import * as Haptics from 'expo-haptics';
 import { speechService } from '@/services/speech/SpeechService';
 import { ttsService } from '@/services/audio/TTSService';
@@ -11,7 +18,7 @@ import { useSearchStore } from '@/stores/useSearchStore';
 import { navigateToTab, navigateToVoiceCommands } from '@/app/navigation/navigationRef';
 import { askAnything } from '@/services/ai/AiBibleService';
 import { useAccessibility } from '@/hooks/useAccessibility';
-import { Ionicons } from '@expo/vector-icons';
+import { AngelAvatar } from '@/components/common/AngelAvatar';
 import {
   TTS_SPEED_STEP,
   MIN_TTS_SPEED,
@@ -20,6 +27,12 @@ import {
 
 const RESTART_DELAY_MS = 800;
 const ERROR_RESTART_DELAY_MS = 2000;
+
+/** Wake word — user says "Prince" to activate the angel. Case insensitive. */
+const WAKE_WORD_RE = /^(?:prince|பிரின்ஸ்)\b[,.\s:]*/i;
+
+const { width: SCREEN_W } = Dimensions.get('window');
+const ANGEL_OVERLAY_SIZE = Math.min(SCREEN_W * 0.22, 90);
 
 interface Props {
   children: React.ReactNode;
@@ -36,6 +49,8 @@ export function GlobalVoiceProvider({ children }: Props) {
   const setError = useVoiceStore((s) => s.setError);
   const recognitionLanguage = useVoiceStore((s) => s.recognitionLanguage);
   const setRecognitionLanguage = useVoiceStore((s) => s.setRecognitionLanguage);
+  const angelState = useVoiceStore((s) => s.angelState);
+  const setAngelState = useVoiceStore((s) => s.setAngelState);
 
   // Settings
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
@@ -50,11 +65,27 @@ export function GlobalVoiceProvider({ children }: Props) {
 
   const mountedRef = useRef(true);
   const cleanupFns = useRef<Array<() => void>>([]);
-  const alwaysOnRef = useRef(false);
-  const [alwaysOn, setAlwaysOn] = useState(false);
+  const alwaysOnRef = useRef(true); // Always on by default
   const restartTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const recognitionLanguageRef = useRef(recognitionLanguage);
   const isProcessingRef = useRef(false);
+  const isSpeakingRef = useRef(false);
+
+  // Track TTS speaking state to update angel
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const speaking = ttsService.isSpeaking();
+      if (speaking !== isSpeakingRef.current) {
+        isSpeakingRef.current = speaking;
+        if (speaking) {
+          setAngelState('speaking');
+        } else if (!isProcessingRef.current) {
+          setAngelState(useVoiceStore.getState().isListening ? 'listening' : 'idle');
+        }
+      }
+    }, 200);
+    return () => clearInterval(interval);
+  }, [setAngelState]);
 
   // Keep language ref fresh
   useEffect(() => {
@@ -71,7 +102,7 @@ export function GlobalVoiceProvider({ children }: Props) {
   }, [primaryLanguage, setRecognitionLanguage]);
 
   const startSession = useCallback(async () => {
-    if (!mountedRef.current || isProcessingRef.current) return;
+    if (!mountedRef.current || isProcessingRef.current || isSpeakingRef.current) return;
 
     try {
       const available = await speechService.isAvailable();
@@ -80,7 +111,6 @@ export function GlobalVoiceProvider({ children }: Props) {
       const permitted = await speechService.requestPermissions();
       if (!permitted) return;
 
-      // Clean previous listeners
       cleanupFns.current.forEach((fn) => fn());
       cleanupFns.current = [];
 
@@ -106,12 +136,11 @@ export function GlobalVoiceProvider({ children }: Props) {
       cleanupFns.current.push(
         speechService.onError((err) => {
           if (mountedRef.current) {
-            // Don't show "no-speech" as an error — just restart
             if (err !== 'no-speech') {
               setError(err);
             }
             setListening(false);
-            // Auto-restart after error
+            setAngelState('idle');
             if (alwaysOnRef.current) {
               scheduleRestart(ERROR_RESTART_DELAY_MS);
             }
@@ -123,7 +152,9 @@ export function GlobalVoiceProvider({ children }: Props) {
         speechService.onEnd(() => {
           if (mountedRef.current) {
             setListening(false);
-            // Auto-restart if always-on is enabled
+            if (!isProcessingRef.current && !isSpeakingRef.current) {
+              setAngelState('idle');
+            }
             if (alwaysOnRef.current && !isProcessingRef.current) {
               scheduleRestart(RESTART_DELAY_MS);
             }
@@ -134,13 +165,15 @@ export function GlobalVoiceProvider({ children }: Props) {
       const locale = recognitionLanguageRef.current === 'ta' ? 'ta-IN' : 'en-US';
       await speechService.startListening(locale);
       setListening(true);
+      setAngelState('listening');
     } catch {
       setListening(false);
+      setAngelState('idle');
       if (alwaysOnRef.current) {
         scheduleRestart(ERROR_RESTART_DELAY_MS);
       }
     }
-  }, [setListening, setError, setPartialTranscript]);
+  }, [setListening, setError, setPartialTranscript, setAngelState]);
 
   const scheduleRestart = useCallback((delay: number) => {
     if (restartTimerRef.current) {
@@ -154,23 +187,72 @@ export function GlobalVoiceProvider({ children }: Props) {
     }, delay);
   }, [startSession]);
 
+  // --- Auto-start on mount ---
+  useEffect(() => {
+    mountedRef.current = true;
+    alwaysOnRef.current = true;
+    // Small delay for navigation to settle
+    const timer = setTimeout(() => {
+      void startSession();
+    }, 1500);
+    return () => {
+      clearTimeout(timer);
+      mountedRef.current = false;
+      alwaysOnRef.current = false;
+      cleanupFns.current.forEach((fn) => fn());
+      cleanupFns.current = [];
+      if (restartTimerRef.current) {
+        clearTimeout(restartTimerRef.current);
+      }
+      void speechService.cancelListening();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleFinalTranscript = useCallback(
     (text: string) => {
       if (!mountedRef.current || !text.trim()) return;
 
-      setTranscript(text);
+      let query = text.trim();
+
+      // Check for wake word "Prince"
+      const hasWakeWord = WAKE_WORD_RE.test(query);
+      if (hasWakeWord) {
+        // Strip wake word
+        query = query.replace(WAKE_WORD_RE, '').trim();
+        // Navigate to Home when wake word is used
+        navigateToTab('Home');
+      }
+
+      // If only the wake word was said with nothing after, just acknowledge
+      if (!query) {
+        if (hasWakeWord) {
+          setAngelState('speaking');
+          const lang = recognitionLanguageRef.current;
+          const greeting = lang === 'ta'
+            ? 'சொல்லுங்கள், நான் கேட்கிறேன்.'
+            : 'Yes, I\'m listening.';
+          void ttsService.speak(greeting, lang);
+          AccessibilityInfo.announceForAccessibility(greeting);
+        }
+        scheduleRestart(RESTART_DELAY_MS);
+        return;
+      }
+
+      setTranscript(query);
       setListening(false);
 
       if (hapticsEnabled) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       }
 
-      const parsed = voiceCommandParser.parse(text);
+      // Try voice command first
+      const parsed = voiceCommandParser.parse(query);
 
       if (!parsed) {
         // No command matched — send as AI question
-        setQuery(text);
-        handleAskAi(text);
+        setQuery(query);
+        navigateToTab('Home');
+        handleAskAi(query);
         return;
       }
 
@@ -181,6 +263,7 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'searchInEnglish':
           if (parsed.args) {
             setQuery(parsed.args);
+            navigateToTab('Home');
             handleAskAi(parsed.args);
           }
           break;
@@ -188,6 +271,7 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'stop':
           void ttsService.stop();
           setSpeakingStatus('idle');
+          setAngelState('idle');
           announceAndRestart('Stopped.');
           break;
 
@@ -196,6 +280,7 @@ export function GlobalVoiceProvider({ children }: Props) {
           const answer = state.lastAiAnswer;
           const lang = state.lastAiLanguage ?? recognitionLanguageRef.current;
           if (answer) {
+            setAngelState('speaking');
             void ttsService.speak(answer, lang);
           }
           scheduleRestart(RESTART_DELAY_MS);
@@ -205,6 +290,7 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'repeatFrom':
         case 'repeatVerse':
           if (parsed.args) {
+            navigateToTab('Home');
             handleAskAi(`Read verse ${parsed.args}`);
           }
           break;
@@ -269,12 +355,14 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'share':
         case 'recordReflection':
         case 'startMemorization':
-          // These are screen-context commands — set transcript so screens can pick up
           scheduleRestart(RESTART_DELAY_MS);
           break;
 
         default:
-          scheduleRestart(RESTART_DELAY_MS);
+          // Unrecognized command — treat as question
+          setQuery(query);
+          navigateToTab('Home');
+          handleAskAi(query);
           break;
       }
     },
@@ -284,6 +372,7 @@ export function GlobalVoiceProvider({ children }: Props) {
       setQuery,
       setSpeakingStatus,
       setLastAiAnswer,
+      setAngelState,
       setRecognitionLanguage,
       ttsSpeed,
       setTtsSpeed,
@@ -296,12 +385,14 @@ export function GlobalVoiceProvider({ children }: Props) {
     (question: string) => {
       const lang = recognitionLanguageRef.current;
       isProcessingRef.current = true;
+      setAngelState('processing');
       void ttsService.stop();
 
       askAnything(question, lang)
         .then((res) => {
           if (!mountedRef.current) return;
           setLastAiAnswer(res.answer, res.detectedLanguage);
+          setAngelState('speaking');
           void ttsService.speak(res.answer, res.detectedLanguage);
           AccessibilityInfo.announceForAccessibility(res.answer.slice(0, 200));
         })
@@ -310,6 +401,7 @@ export function GlobalVoiceProvider({ children }: Props) {
           const errorMsg = lang === 'ta'
             ? 'மன்னிக்கவும், இப்போது பதிலளிக்க முடியவில்லை.'
             : 'Sorry, I could not answer that right now.';
+          setAngelState('speaking');
           void ttsService.speak(errorMsg, lang);
         })
         .finally(() => {
@@ -319,7 +411,7 @@ export function GlobalVoiceProvider({ children }: Props) {
           }
         });
     },
-    [setLastAiAnswer, scheduleRestart],
+    [setLastAiAnswer, setAngelState, scheduleRestart],
   );
 
   const announceAndRestart = useCallback(
@@ -330,115 +422,112 @@ export function GlobalVoiceProvider({ children }: Props) {
     [scheduleRestart],
   );
 
-  // Toggle always-on listening
-  const toggleAlwaysOn = useCallback(async () => {
-    if (alwaysOnRef.current) {
-      // Turn off
-      alwaysOnRef.current = false;
-      setAlwaysOn(false);
-      if (restartTimerRef.current) {
-        clearTimeout(restartTimerRef.current);
-        restartTimerRef.current = null;
-      }
+  // Tap angel to manually trigger/stop
+  const handleAngelPress = useCallback(async () => {
+    if (isListening) {
       try {
         await speechService.stopListening();
-      } catch {
-        // ok
-      }
+      } catch { /* ok */ }
       setListening(false);
-      if (hapticsEnabled) {
-        void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-      }
+      setAngelState('idle');
     } else {
-      // Turn on
-      alwaysOnRef.current = true;
-      setAlwaysOn(true);
       if (hapticsEnabled) {
         void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
       }
+      navigateToTab('Home');
       await startSession();
     }
-  }, [startSession, setListening, hapticsEnabled]);
+  }, [isListening, startSession, setListening, setAngelState, hapticsEnabled]);
 
-  // Cleanup on unmount
-  useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      alwaysOnRef.current = false;
-      cleanupFns.current.forEach((fn) => fn());
-      cleanupFns.current = [];
-      if (restartTimerRef.current) {
-        clearTimeout(restartTimerRef.current);
-      }
-      void speechService.cancelListening();
-    };
-  }, []);
+  // Status label for the angel
+  const statusLabel =
+    angelState === 'listening'
+      ? 'Listening...'
+      : angelState === 'processing'
+        ? 'Thinking...'
+        : angelState === 'speaking'
+          ? 'Speaking...'
+          : '';
 
   return (
     <View style={{ flex: 1 }}>
       {children}
 
-      {/* Floating mic indicator */}
-      <Pressable
-        onPress={toggleAlwaysOn}
-        accessibilityRole="button"
-        accessibilityLabel={
-          alwaysOn
-            ? 'Voice commands active. Double tap to turn off.'
-            : 'Turn on always-listening voice commands'
-        }
-        accessibilityState={{ selected: alwaysOn }}
-        style={({ pressed }) => [
-          styles.floatingMic,
-          {
-            backgroundColor: isListening
-              ? colors.accent
-              : alwaysOn
-                ? colors.accentDark
-                : colors.card,
-            borderColor: isListening ? colors.gold : colors.border,
-            opacity: pressed ? 0.85 : 1,
-          },
-        ]}
-      >
-        <Ionicons
-          name={isListening ? 'mic' : alwaysOn ? 'mic-outline' : 'mic-off-outline'}
-          size={22}
-          color={isListening || alwaysOn ? '#FFFFFF' : colors.textSecondary}
-        />
-        {isListening ? (
-          <View style={[styles.listeningDot, { backgroundColor: colors.gold }]} />
+      {/* Floating Angel Overlay — always visible */}
+      <View style={styles.angelOverlay} pointerEvents="box-none">
+        <Pressable
+          onPress={handleAngelPress}
+          accessibilityRole="button"
+          accessibilityLabel={
+            angelState === 'listening'
+              ? 'Angel is listening. Tap to stop.'
+              : angelState === 'processing'
+                ? 'Angel is thinking.'
+                : angelState === 'speaking'
+                  ? 'Angel is speaking. Tap to interrupt.'
+                  : 'Tap the angel to start voice input. Or say Prince to activate.'
+          }
+          style={styles.angelPressable}
+        >
+          <AngelAvatar
+            state={angelState}
+            size={ANGEL_OVERLAY_SIZE}
+            glowColor={colors.angelGlow}
+            accentColor={colors.accent}
+          />
+        </Pressable>
+
+        {/* Status text */}
+        {statusLabel ? (
+          <View style={[styles.statusBadge, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <View style={[styles.statusDot, {
+              backgroundColor:
+                angelState === 'listening' ? colors.accent
+                : angelState === 'processing' ? colors.accentLight
+                : colors.success,
+            }]} />
+            <Text style={[styles.statusText, { color: colors.text }]}>
+              {statusLabel}
+            </Text>
+          </View>
         ) : null}
-      </Pressable>
+      </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  floatingMic: {
+  angelOverlay: {
     position: 'absolute',
-    bottom: 90,
-    right: 16,
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    borderWidth: 1.5,
+    bottom: 88,
+    right: 8,
     alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
     zIndex: 999,
   },
-  listeningDot: {
-    position: 'absolute',
-    top: 4,
-    right: 4,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+  angelPressable: {
+    shadowColor: '#A855F7',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 10,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    marginTop: 4,
+  },
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+  },
+  statusText: {
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

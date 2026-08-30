@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { View, Text, Image, Switch, ScrollView, StyleSheet, Platform } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useAccessibility } from '@/hooks/useAccessibility';
@@ -66,189 +67,205 @@ export function SettingsScreen() {
   );
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={['top']}
-    >
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text
-          style={[styles.title, { color: colors.text }]}
-          accessibilityRole="header"
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <LinearGradient
+        colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
+      <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.content}
+          showsVerticalScrollIndicator={false}
         >
-          {t('settings.title')}
-        </Text>
+          <Text
+            style={[styles.title, { color: colors.text }]}
+            accessibilityRole="header"
+          >
+            {t('settings.title')}
+          </Text>
 
-        {/* Account */}
-        <SectionHeader title={t('settings.account')} />
-        <View style={[styles.accountCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <View style={styles.accountInfo}>
-            {authUser?.photoUrl ? (
-              <Image
-                source={{ uri: authUser.photoUrl }}
-                style={styles.avatar}
-                accessibilityLabel="Profile photo"
-              />
-            ) : (
-              <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent }]}>
-                <Ionicons name="person" size={24} color={colors.background} />
-              </View>
-            )}
-            <View style={styles.accountText}>
-              <Text style={[styles.accountName, { color: colors.text }]}>
-                {authUser?.displayName ?? 'Guest'}
-              </Text>
-              {authUser?.email ? (
-                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
-                  {authUser.email}
-                </Text>
+          {/* Account */}
+          <SectionHeader title={t('settings.account')} />
+          <View style={[styles.accountCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <View style={styles.accountInfo}>
+              {authUser?.photoUrl ? (
+                <Image
+                  source={{ uri: authUser.photoUrl }}
+                  style={[styles.avatar, { borderColor: colors.accent }]}
+                  accessibilityLabel="Profile photo"
+                />
               ) : (
-                <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
-                  {authMethod === 'guest' ? t('auth.guestUser') : ''}
-                </Text>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: colors.accent }]}>
+                  <Ionicons name="person" size={24} color="#FFFFFF" />
+                </View>
               )}
+              <View style={styles.accountText}>
+                <Text style={[styles.accountName, { color: colors.text }]}>
+                  {authUser?.displayName ?? 'Guest'}
+                </Text>
+                {authUser?.email ? (
+                  <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+                    {authUser.email}
+                  </Text>
+                ) : (
+                  <Text style={[styles.accountEmail, { color: colors.textSecondary }]}>
+                    {authMethod === 'guest' ? t('auth.guestUser') : ''}
+                  </Text>
+                )}
+              </View>
             </View>
           </View>
-        </View>
 
-        {/* Language */}
-        <SectionHeader title={t('settings.language')} />
-        <View style={styles.languageRow}>
-          <PrimaryButton
-            title={t('settings.languageEn')}
-            onPress={() => handleLanguageSelect('en')}
-            style={{
-              ...styles.langButton,
-              backgroundColor: primaryLanguage === 'en' ? colors.accent : colors.card,
-            }}
-            textStyle={{
-              color: primaryLanguage === 'en' ? colors.background : colors.text,
-            }}
-            accessibilityLabel={`${t('settings.languageEn')}${primaryLanguage === 'en' ? ', selected' : ''}`}
-          />
-          <PrimaryButton
-            title={t('settings.languageTa')}
-            onPress={() => handleLanguageSelect('ta')}
-            style={{
-              ...styles.langButton,
-              backgroundColor: primaryLanguage === 'ta' ? colors.accent : colors.card,
-            }}
-            textStyle={{
-              color: primaryLanguage === 'ta' ? colors.background : colors.text,
-            }}
-            accessibilityLabel={`${t('settings.languageTa')}${primaryLanguage === 'ta' ? ', selected' : ''}`}
-          />
-        </View>
+          {/* Language */}
+          <SectionHeader title={t('settings.language')} />
+          <View style={styles.languageRow}>
+            <PrimaryButton
+              title={t('settings.languageEn')}
+              onPress={() => handleLanguageSelect('en')}
+              style={{
+                ...styles.langButton,
+                backgroundColor: primaryLanguage === 'en' ? colors.accent : colors.glass,
+                borderWidth: 1,
+                borderColor: primaryLanguage === 'en' ? colors.accent : colors.glassBorder,
+              }}
+              textStyle={{
+                color: primaryLanguage === 'en' ? '#FFFFFF' : colors.text,
+              }}
+              accessibilityLabel={`${t('settings.languageEn')}${primaryLanguage === 'en' ? ', selected' : ''}`}
+            />
+            <PrimaryButton
+              title={t('settings.languageTa')}
+              onPress={() => handleLanguageSelect('ta')}
+              style={{
+                ...styles.langButton,
+                backgroundColor: primaryLanguage === 'ta' ? colors.accent : colors.glass,
+                borderWidth: 1,
+                borderColor: primaryLanguage === 'ta' ? colors.accent : colors.glassBorder,
+              }}
+              textStyle={{
+                color: primaryLanguage === 'ta' ? '#FFFFFF' : colors.text,
+              }}
+              accessibilityLabel={`${t('settings.languageTa')}${primaryLanguage === 'ta' ? ', selected' : ''}`}
+            />
+          </View>
 
-        {/* Appearance */}
-        <SectionHeader title={t('settings.appearance')} />
-        <HighContrastToggle />
-        <SettingRow
-          label={t('settings.dynamicText')}
-          value={dynamicTextScale}
-          onToggle={toggleDynamicTextScale}
-          colors={colors}
-        />
-
-        {/* Audio & Voice */}
-        <SectionHeader title={t('settings.audio')} />
-        <View style={styles.ttsSpeedRow}>
-          <Text style={[styles.label, { color: colors.text }]}>
-            {t('settings.ttsSpeed')}
-          </Text>
-          <TtsSpeedControl />
-        </View>
-        <SettingRow
-          label={t('settings.autoPlay')}
-          value={autoPlayVerseOnOpen}
-          onToggle={toggleAutoPlay}
-          colors={colors}
-        />
-        {!isWeb() && (
-          <SettingRow
-            label={t('settings.haptics')}
-            value={hapticsEnabled}
-            onToggle={toggleHaptics}
-            colors={colors}
-          />
-        )}
-        {!isWeb() && (
-          <SettingRow
-            label={t('settings.shakeToSpeak')}
-            value={shakeToSpeakEnabled}
-            onToggle={toggleShakeToSpeak}
-            colors={colors}
-          />
-        )}
-
-        {/* Notifications */}
-        {!isWeb() && (
-          <>
-            <SectionHeader title={t('settings.notifications')} />
+          {/* Appearance */}
+          <SectionHeader title={t('settings.appearance')} />
+          <View style={[styles.sectionCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <HighContrastToggle />
             <SettingRow
-              label={t('settings.dailyPush')}
-              value={dailyPushEnabled}
-              onToggle={handleDailyPushToggle}
+              label={t('settings.dynamicText')}
+              value={dynamicTextScale}
+              onToggle={toggleDynamicTextScale}
               colors={colors}
             />
-            {dailyPushEnabled && (
-              <View style={[styles.settingRow, { borderBottomColor: colors.border }]}>
-                <Text style={[styles.label, { color: colors.text }]}>
-                  {t('settings.dailyPushTime')}
-                </Text>
-                <Text style={[styles.timeValue, { color: colors.accent }]}>
-                  {dailyPushTime}
-                </Text>
-              </View>
-            )}
-            {notifPermDenied && (
-              <PermissionPromptCard
-                icon="notifications-off-outline"
-                title={t('permissions.notificationTitle')}
-                message={t('permissions.notificationMessage')}
-                actionLabel={t('permissions.notificationAction')}
+          </View>
+
+          {/* Audio & Voice */}
+          <SectionHeader title={t('settings.audio')} />
+          <View style={[styles.sectionCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+            <View style={styles.ttsSpeedRow}>
+              <Text style={[styles.label, { color: colors.text }]}>
+                {t('settings.ttsSpeed')}
+              </Text>
+              <TtsSpeedControl />
+            </View>
+            <SettingRow
+              label={t('settings.autoPlay')}
+              value={autoPlayVerseOnOpen}
+              onToggle={toggleAutoPlay}
+              colors={colors}
+            />
+            {!isWeb() && (
+              <SettingRow
+                label={t('settings.haptics')}
+                value={hapticsEnabled}
+                onToggle={toggleHaptics}
+                colors={colors}
               />
             )}
-          </>
-        )}
+            {!isWeb() && (
+              <SettingRow
+                label={t('settings.shakeToSpeak')}
+                value={shakeToSpeakEnabled}
+                onToggle={toggleShakeToSpeak}
+                colors={colors}
+                isLast
+              />
+            )}
+          </View>
 
-        {/* Sign Out */}
-        <View style={styles.signOutContainer}>
-          <PrimaryButton
-            title={t('settings.signOut')}
-            onPress={signOut}
-            style={{ backgroundColor: colors.error }}
-            accessibilityHint="Sign out of your account"
-          />
-        </View>
+          {/* Notifications */}
+          {!isWeb() && (
+            <>
+              <SectionHeader title={t('settings.notifications')} />
+              <View style={[styles.sectionCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+                <SettingRow
+                  label={t('settings.dailyPush')}
+                  value={dailyPushEnabled}
+                  onToggle={handleDailyPushToggle}
+                  colors={colors}
+                />
+                {dailyPushEnabled && (
+                  <View style={[styles.settingRow]}>
+                    <Text style={[styles.label, { color: colors.text }]}>
+                      {t('settings.dailyPushTime')}
+                    </Text>
+                    <Text style={[styles.timeValue, { color: colors.gold }]}>
+                      {dailyPushTime}
+                    </Text>
+                  </View>
+                )}
+              </View>
+              {notifPermDenied && (
+                <PermissionPromptCard
+                  icon="notifications-off-outline"
+                  title={t('permissions.notificationTitle')}
+                  message={t('permissions.notificationMessage')}
+                  actionLabel={t('permissions.notificationAction')}
+                />
+              )}
+            </>
+          )}
 
-        {/* Bottom spacing */}
-        <View style={{ height: 40 }} />
-      </ScrollView>
-    </SafeAreaView>
+          {/* Sign Out */}
+          <View style={styles.signOutContainer}>
+            <PrimaryButton
+              title={t('settings.signOut')}
+              onPress={signOut}
+              style={{ backgroundColor: 'rgba(251, 113, 133, 0.2)', borderWidth: 1, borderColor: colors.error }}
+              textStyle={{ color: colors.error }}
+              accessibilityHint="Sign out of your account"
+            />
+          </View>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </SafeAreaView>
+    </View>
   );
 }
 
-// Reusable setting toggle row
 interface SettingRowProps {
   label: string;
   value: boolean;
   onToggle: (value: boolean) => void;
   colors: ReturnType<typeof useAccessibility>['colors'];
+  isLast?: boolean;
 }
 
-function SettingRow({ label, value, onToggle, colors }: SettingRowProps) {
+function SettingRow({ label, value, onToggle, colors, isLast }: SettingRowProps) {
   return (
-    <View style={[settingStyles.row, { borderBottomColor: colors.border }]}>
+    <View style={[settingStyles.row, !isLast && { borderBottomColor: colors.glassBorder, borderBottomWidth: StyleSheet.hairlineWidth }]}>
       <Text style={[settingStyles.label, { color: colors.text }]}>{label}</Text>
       <Switch
         value={value}
         onValueChange={onToggle}
-        trackColor={{ false: colors.placeholder, true: colors.accent }}
-        thumbColor={colors.background}
+        trackColor={{ false: 'rgba(155, 142, 196, 0.3)', true: colors.accent }}
+        thumbColor={value ? '#FFFFFF' : 'rgba(255,255,255,0.7)'}
         accessibilityLabel={label}
         accessibilityRole="switch"
         accessibilityState={{ checked: value }}
@@ -264,7 +281,6 @@ const settingStyles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: MIN_TOUCH_SIZE,
   },
   label: {
@@ -286,6 +302,13 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontWeight: '700',
     marginBottom: 24,
+    letterSpacing: 0.3,
+  },
+  sectionCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    paddingHorizontal: 16,
+    marginBottom: 16,
   },
   languageRow: {
     flexDirection: 'row',
@@ -294,13 +317,13 @@ const styles = StyleSheet.create({
   },
   langButton: {
     flex: 1,
+    borderRadius: 16,
   },
   settingRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingVertical: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
     minHeight: MIN_TOUCH_SIZE,
   },
   label: {
@@ -319,7 +342,7 @@ const styles = StyleSheet.create({
   },
   accountCard: {
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 20,
     borderWidth: 1,
     marginBottom: 16,
   },
@@ -332,6 +355,7 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
+    borderWidth: 2,
   },
   avatarPlaceholder: {
     width: 48,

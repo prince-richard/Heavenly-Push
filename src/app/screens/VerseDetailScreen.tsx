@@ -10,6 +10,7 @@ import {
   Pressable,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useTranslation } from 'react-i18next';
 import { useRoute, useNavigation } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -39,7 +40,6 @@ export function VerseDetailScreen() {
   const { colors } = useAccessibility();
   const route = useRoute<DetailRoute>();
   const navigation = useNavigation<DetailNav>();
-  // Support legacy verseId param OR new reference param.
   const reference = route.params?.reference ?? route.params?.verseId ?? '';
   const autoPlay = route.params?.autoPlay;
 
@@ -59,7 +59,6 @@ export function VerseDetailScreen() {
   const [explainLoading, setExplainLoading] = useState(false);
   const [explainError, setExplainError] = useState<string | null>(null);
 
-  // Load verse via AI/API
   useEffect(() => {
     if (!reference) {
       setLoadError('No reference provided');
@@ -96,7 +95,6 @@ export function VerseDetailScreen() {
 
   const isFavorited = favorites.some((f) => f.reference === reference);
 
-  // Auto-play if requested
   useEffect(() => {
     if (verse && primaryText && (autoPlay || autoPlayOnOpen)) {
       const timer = setTimeout(() => {
@@ -189,27 +187,34 @@ export function VerseDetailScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        edges={['bottom']}
-      >
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.center}>
           <ActivityIndicator size="large" color={colors.accent} />
           <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
-            Loading {reference}…
+            Loading {reference}...
           </Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   if (loadError || !verse) {
     return (
-      <SafeAreaView
-        style={{ flex: 1, backgroundColor: colors.background }}
-        edges={['bottom']}
-      >
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <LinearGradient
+          colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 0, y: 1 }}
+          style={StyleSheet.absoluteFill}
+        />
         <View style={styles.center}>
+          <Ionicons name="alert-circle-outline" size={48} color={colors.error} />
           <Text style={[styles.errorText, { color: colors.error }]}>
             {loadError || 'Verse not found'}
           </Text>
@@ -225,15 +230,18 @@ export function VerseDetailScreen() {
             <Text style={styles.backButtonText}>Go back</Text>
           </Pressable>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView
-      style={{ flex: 1, backgroundColor: colors.background }}
-      edges={['bottom']}
-    >
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <LinearGradient
+        colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 0, y: 1 }}
+        style={StyleSheet.absoluteFill}
+      />
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -242,7 +250,7 @@ export function VerseDetailScreen() {
         {/* Header row */}
         <View style={styles.headerRow}>
           <Text
-            style={[styles.reference, { color: colors.accent }]}
+            style={[styles.reference, { color: colors.gold }]}
             accessibilityRole="header"
           >
             {reference}
@@ -254,7 +262,7 @@ export function VerseDetailScreen() {
               accessibilityLabel={
                 isFavorited ? 'Remove from favorites' : 'Add to favorites'
               }
-              color={isFavorited ? colors.accent : colors.text}
+              color={isFavorited ? colors.error : colors.text}
               size={28}
             />
             <IconButtonAccessible
@@ -266,26 +274,29 @@ export function VerseDetailScreen() {
           </View>
         </View>
 
-        {/* Primary text */}
-        <Text
-          style={[styles.verseText, { color: colors.text }]}
-          accessible={true}
-          accessibilityRole="text"
-          accessibilityLabel={`${reference}. ${primaryText}`}
-        >
-          {primaryText}
-        </Text>
-
-        {/* Secondary language */}
-        {secondaryText ? (
+        {/* Primary text in glass card */}
+        <View style={[styles.verseCard, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
           <Text
-            style={[styles.secondaryText, { color: colors.textSecondary }]}
+            style={[styles.verseText, { color: colors.text }]}
             accessible={true}
             accessibilityRole="text"
+            accessibilityLabel={`${reference}. ${primaryText}`}
           >
-            {secondaryText}
+            {primaryText}
           </Text>
-        ) : null}
+
+          {secondaryText ? (
+            <View style={[styles.secondaryDivider, { borderTopColor: colors.glassBorder }]}>
+              <Text
+                style={[styles.secondaryText, { color: colors.textSecondary }]}
+                accessible={true}
+                accessibilityRole="text"
+              >
+                {secondaryText}
+              </Text>
+            </View>
+          ) : null}
+        </View>
 
         {/* Playback controls */}
         <PlaybackControls
@@ -299,7 +310,7 @@ export function VerseDetailScreen() {
           <PrimaryButton
             title={
               explainLoading
-                ? t('verse.explaining', { defaultValue: 'Getting explanation…' })
+                ? t('verse.explaining', { defaultValue: 'Getting explanation...' })
                 : t('verse.explain', { defaultValue: 'Explain this verse' })
             }
             onPress={handleExplain}
@@ -318,12 +329,12 @@ export function VerseDetailScreen() {
           <View
             style={[
               styles.explanationCard,
-              { backgroundColor: colors.card, borderColor: colors.accent },
+              { backgroundColor: colors.glass, borderColor: colors.glassBorder },
             ]}
           >
             <View style={styles.explanationHeader}>
-              <Ionicons name="sparkles-outline" size={18} color={colors.accent} />
-              <Text style={[styles.explanationTitle, { color: colors.accent }]}>
+              <Ionicons name="sparkles" size={18} color={colors.gold} />
+              <Text style={[styles.explanationTitle, { color: colors.gold }]}>
                 {t('verse.explanation', { defaultValue: 'Explanation' })}
               </Text>
               {isSpeaking ? (
@@ -347,7 +358,7 @@ export function VerseDetailScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -363,6 +374,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     padding: 24,
+    gap: 12,
   },
   loadingText: {
     fontSize: 16,
@@ -390,44 +402,53 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   headerActions: {
     flexDirection: 'row',
     gap: 4,
   },
   reference: {
-    fontSize: 22,
+    fontSize: 24,
     fontWeight: '700',
     flex: 1,
+    letterSpacing: 0.3,
+  },
+  verseCard: {
+    borderRadius: 20,
+    borderWidth: 1,
+    padding: 20,
+    marginBottom: 16,
   },
   verseText: {
     fontSize: 20,
     lineHeight: 32,
-    marginBottom: 16,
+  },
+  secondaryDivider: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    marginTop: 16,
+    paddingTop: 16,
   },
   secondaryText: {
     fontSize: 16,
     lineHeight: 26,
     fontStyle: 'italic',
-    marginBottom: 16,
   },
   actionsContainer: {
     gap: 12,
     marginVertical: 16,
   },
   explanationCard: {
-    padding: 16,
-    borderRadius: 16,
+    padding: 20,
+    borderRadius: 20,
     borderWidth: 1,
-    borderLeftWidth: 3,
     marginTop: 12,
   },
   explanationHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-    marginBottom: 10,
+    marginBottom: 12,
   },
   explanationTitle: {
     fontSize: 16,
@@ -436,6 +457,6 @@ const styles = StyleSheet.create({
   },
   explanationText: {
     fontSize: 16,
-    lineHeight: 24,
+    lineHeight: 26,
   },
 });

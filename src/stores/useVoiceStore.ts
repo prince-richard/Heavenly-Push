@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 
+type AngelState = 'idle' | 'listening' | 'speaking' | 'processing';
+
 interface VoiceState {
   isListening: boolean;
   transcript: string;
@@ -9,11 +11,10 @@ interface VoiceState {
   /**
    * Language used for the next speech-recognition session.
    * Ephemeral — does not persist or mutate user settings.
-   * Defaults to user's primary language but can be flipped from the
-   * Home screen pill so users can ask in either language without
-   * digging into Settings.
    */
   recognitionLanguage: 'en' | 'ta';
+  /** Global angel animation state — driven by GlobalVoiceProvider. */
+  angelState: AngelState;
 }
 
 interface VoiceActions {
@@ -23,6 +24,7 @@ interface VoiceActions {
   setError: (error: string | null) => void;
   setVoiceMode: (voiceMode: boolean) => void;
   setRecognitionLanguage: (language: 'en' | 'ta') => void;
+  setAngelState: (state: AngelState) => void;
   reset: () => void;
 }
 
@@ -35,6 +37,7 @@ const initialState: VoiceState = {
   error: null,
   voiceMode: false,
   recognitionLanguage: 'ta',
+  angelState: 'idle',
 };
 
 export const useVoiceStore = create<VoiceStore>()((set) => ({
@@ -46,10 +49,10 @@ export const useVoiceStore = create<VoiceStore>()((set) => ({
   setError: (error) => set({ error }),
   setVoiceMode: (voiceMode) => set({ voiceMode }),
   setRecognitionLanguage: (recognitionLanguage) => set({ recognitionLanguage }),
+  setAngelState: (angelState) => set({ angelState }),
   reset: () =>
     set((state) => ({
       ...initialState,
-      // Keep the user's recognition language pick across resets.
       recognitionLanguage: state.recognitionLanguage,
     })),
 }));

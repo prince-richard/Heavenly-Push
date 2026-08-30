@@ -18,11 +18,13 @@ export function RootNavigator() {
         headerStyle: {
           backgroundColor: colors.background,
         },
-        headerTintColor: colors.text,
+        headerTintColor: colors.accent,
         headerTitleStyle: {
           fontWeight: '700',
           fontSize: 20,
+          color: colors.text,
         },
+        headerShadowVisible: false,
         contentStyle: {
           backgroundColor: colors.background,
         },

@@ -143,7 +143,7 @@ export function VoiceCommandsScreen() {
                             key={phrase}
                             style={[
                               styles.phrasePill,
-                              { backgroundColor: 'rgba(212,175,55,0.15)', borderColor: colors.gold },
+                              { backgroundColor: 'rgba(168, 85, 247, 0.1)', borderColor: colors.accent },
                             ]}
                           >
                             <Text style={[styles.phraseText, { color: colors.text }]}>

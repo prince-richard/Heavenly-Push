@@ -34,8 +34,8 @@ import {
   type AiDailyVerseResponse,
   type AskVerse,
 } from '@/services/ai/AiBibleService';
-import { IconButtonAccessible } from '@/components/common/IconButtonAccessible';
-import { Halo } from '@/components/common/Halo';
+import { AngelAvatar } from '@/components/common/AngelAvatar';
+import { GlassCard } from '@/components/common/GlassCard';
 import { Starfield } from '@/components/common/Starfield';
 import { FavoriteButton } from '@/components/verse/FavoriteButton';
 import { MIN_TOUCH_SIZE } from '@/constants/accessibility';
@@ -64,7 +64,7 @@ function getGreeting(): string {
 }
 
 const { width: SCREEN_W } = Dimensions.get('window');
-const MIC_SIZE = Math.min(SCREEN_W * 0.4, 180);
+const ANGEL_SIZE = Math.min(SCREEN_W * 0.45, 200);
 
 export function HomeScreen() {
   const { t } = useTranslation();
@@ -90,56 +90,21 @@ export function HomeScreen() {
   const prevTranscriptRef = useRef('');
   const scrollViewRef = useRef<ScrollView>(null);
   const msgIdRef = useRef(0);
-
-  // Animations
-  const micScale = useRef(new Animated.Value(1)).current;
   const screenFade = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     Animated.timing(screenFade, {
       toValue: 1,
-      duration: 500,
+      duration: 600,
       easing: Easing.out(Easing.cubic),
       useNativeDriver: true,
     }).start();
   }, [screenFade]);
 
-  // Check AI health on mount
   useEffect(() => {
     checkAiHealth().then((h) => setAiHealthStatus(h.status));
   }, []);
 
-  // Pulsing mic when listening
-  useEffect(() => {
-    if (assistantState === 'listening') {
-      const loop = Animated.loop(
-        Animated.sequence([
-          Animated.timing(micScale, {
-            toValue: 1.06,
-            duration: 700,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(micScale, {
-            toValue: 1,
-            duration: 700,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ]),
-      );
-      loop.start();
-      return () => loop.stop();
-    } else {
-      Animated.timing(micScale, {
-        toValue: 1,
-        duration: 200,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [assistantState, micScale]);
-
-  // Load daily verse from AI
   useEffect(() => {
     let cancelled = false;
     setDailyLoading(true);
@@ -158,7 +123,6 @@ export function HomeScreen() {
     };
   }, [recognitionLanguage]);
 
-  // Shake navigates to voice activation
   useShakeDetector(() => {
     if (!isListening) {
       void handleMicPress();
@@ -198,22 +162,19 @@ export function HomeScreen() {
           return true;
         }
 
-        case 'repeatFrom': {
+        case 'repeatFrom':
           if (parsed.args) {
             addMessage({ type: 'user', text: text });
-            // Search for the verse and read from there
             void sendQuestionToAi(`Read the verse ${parsed.args} and the verses after it`);
           }
           return true;
-        }
 
-        case 'repeatVerse': {
+        case 'repeatVerse':
           if (parsed.args) {
             addMessage({ type: 'user', text: text });
             void sendQuestionToAi(`Read verse ${parsed.args}`);
           }
           return true;
-        }
 
         case 'stop':
           stopTTS();
@@ -226,7 +187,7 @@ export function HomeScreen() {
           const store = useSettingsStore.getState();
           const newSpeed = Math.max(0.5, store.ttsSpeed - 0.25);
           store.setTtsSpeed(newSpeed);
-          addMessage({ type: 'assistant', text: isTa ? `வேகம் குறைக்கப்பட்டது: ${newSpeed}x` : `Speed decreased to ${newSpeed}x` });
+          addMessage({ type: 'assistant', text: isTa ? `வேகம்: ${newSpeed}x` : `Speed: ${newSpeed}x` });
           setAssistantState('responded');
           return true;
         }
@@ -235,14 +196,13 @@ export function HomeScreen() {
           const store = useSettingsStore.getState();
           const newSpeed = Math.min(2.0, store.ttsSpeed + 0.25);
           store.setTtsSpeed(newSpeed);
-          addMessage({ type: 'assistant', text: isTa ? `வேகம் அதிகரிக்கப்பட்டது: ${newSpeed}x` : `Speed increased to ${newSpeed}x` });
+          addMessage({ type: 'assistant', text: isTa ? `வேகம்: ${newSpeed}x` : `Speed: ${newSpeed}x` });
           setAssistantState('responded');
           return true;
         }
 
         case 'saveVerse':
         case 'bookmark': {
-          // Find the last assistant message with verses
           const lastWithVerses = [...chatHistory].reverse().find(
             (m) => m.type === 'assistant' && m.verses && m.verses.length > 0,
           );
@@ -251,13 +211,13 @@ export function HomeScreen() {
             addMessage({
               type: 'assistant',
               text: isTa
-                ? `"${v.reference}" பிடித்தவையில் சேமிக்கப்பட்டது. பிடித்தவை பக்கத்தில் பாருங்கள்.`
-                : `"${v.reference}" saved to favorites. Check the Favorites page.`,
+                ? `"${v.reference}" சேமிக்கப்பட்டது`
+                : `"${v.reference}" saved to favorites`,
             });
           } else {
             addMessage({
               type: 'assistant',
-              text: isTa ? 'சேமிக்க வசனம் இல்லை. முதலில் ஒரு கேள்வி கேளுங்கள்.' : 'No verse to save. Ask a question first.',
+              text: isTa ? 'சேமிக்க வசனம் இல்லை' : 'No verse to save. Ask a question first.',
             });
           }
           setAssistantState('responded');
@@ -266,41 +226,23 @@ export function HomeScreen() {
 
         case 'listSaved':
         case 'openFavorites':
-          addMessage({ type: 'assistant', text: isTa ? 'பிடித்தவை பக்கத்திற்கு செல்கிறேன்...' : 'Opening favorites...' });
-          setAssistantState('responded');
-          setTimeout(() => {
-            (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Favorites' });
-          }, 300);
+          (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Favorites' });
           return true;
 
         case 'readSaved':
-          addMessage({ type: 'assistant', text: isTa ? 'சேமித்த வசனங்களை படிக்க பிடித்தவை பக்கத்திற்கு செல்கிறேன்...' : 'Going to favorites to read saved verses...' });
-          setAssistantState('responded');
-          setTimeout(() => {
-            (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Favorites' });
-          }, 300);
+          (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Favorites' });
           return true;
 
         case 'openHome':
-          addMessage({ type: 'assistant', text: isTa ? 'முகப்பில் இருக்கிறோம்' : "You're already on the home screen." });
-          setAssistantState('responded');
           return true;
 
         case 'openSettings':
-          addMessage({ type: 'assistant', text: isTa ? 'அமைப்புகள் திறக்கிறேன்...' : 'Opening settings...' });
-          setAssistantState('responded');
-          setTimeout(() => {
-            (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Settings' });
-          }, 300);
+          (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Settings' });
           return true;
 
         case 'openVoiceHelp':
         case 'help':
-          addMessage({ type: 'assistant', text: isTa ? 'குரல் கட்டளைகள் பக்கம் திறக்கிறேன்...' : 'Opening voice commands...' });
-          setAssistantState('responded');
-          setTimeout(() => {
-            navigation.navigate('VoiceCommands');
-          }, 300);
+          navigation.navigate('VoiceCommands');
           return true;
 
         case 'speakEnglish':
@@ -320,35 +262,12 @@ export function HomeScreen() {
             const dvText = recognitionLanguage === 'ta'
               ? dailyVerse.tamilText || dailyVerse.englishText
               : dailyVerse.englishText || dailyVerse.tamilText;
-            addMessage({
-              type: 'assistant',
-              text: `${dailyVerse.reference}\n\n${dvText}`,
-            });
+            addMessage({ type: 'assistant', text: `${dailyVerse.reference}\n\n${dvText}` });
             void speakText(`${dailyVerse.reference}. ${dvText}`, recognitionLanguage);
-          } else {
-            addMessage({ type: 'assistant', text: isTa ? 'இன்றைய வசனம் கிடைக்கவில்லை' : 'Daily verse not available.' });
           }
           setAssistantState('responded');
           return true;
 
-        case 'nextVerse':
-        case 'previousVerse':
-        case 'share':
-        case 'recordReflection':
-        case 'startMemorization':
-        case 'read':
-        case 'readContext':
-          // These need VerseDetail screen context
-          addMessage({
-            type: 'assistant',
-            text: isTa
-              ? 'இந்த கட்டளை வசன விவரப் பக்கத்தில் மட்டுமே வேலை செய்யும்.'
-              : 'This command works on the verse detail page. Tap a verse to open it first.',
-          });
-          setAssistantState('responded');
-          return true;
-
-        // For search-type commands, let them fall through to AI
         case 'ask':
         case 'search':
         case 'searchInTamil':
@@ -390,7 +309,6 @@ export function HomeScreen() {
         const message = err instanceof Error ? err.message : 'Something went wrong';
         addMessage({ type: 'error', text: message });
         setAssistantState('error');
-        AccessibilityInfo.announceForAccessibility('Sorry, an error occurred');
       }
     },
     [recognitionLanguage, speakText, setLastAiAnswer, addMessage],
@@ -399,20 +317,14 @@ export function HomeScreen() {
   const sendQuestion = useCallback(
     async (question: string) => {
       if (!question.trim()) return;
-
       stopTTS();
-
-      // Try voice command first
       if (handleVoiceCommand(question.trim())) return;
-
-      // Not a command — send to AI
       addMessage({ type: 'user', text: question.trim() });
       await sendQuestionToAi(question.trim());
     },
     [stopTTS, handleVoiceCommand, addMessage, sendQuestionToAi],
   );
 
-  // When transcript changes and we're in listening state, send to AI
   useEffect(() => {
     if (
       transcript &&
@@ -424,7 +336,6 @@ export function HomeScreen() {
     }
   }, [transcript, assistantState, sendQuestion]);
 
-  // Sync listening state — revert to idle if mic closed with no transcript
   useEffect(() => {
     if (!isListening && assistantState === 'listening') {
       if (!transcript || transcript === prevTranscriptRef.current) {
@@ -441,13 +352,11 @@ export function HomeScreen() {
       await stopListening();
       return;
     }
-
     stopTTS();
     setTextInput('');
     prevTranscriptRef.current = '';
     setAssistantState('listening');
     AccessibilityInfo.announceForAccessibility('Listening. Speak now.');
-
     await startListening();
   }, [isListening, startListening, stopListening, stopTTS]);
 
@@ -471,30 +380,20 @@ export function HomeScreen() {
     [navigation],
   );
 
-  const handleFavoritesPress = useCallback(() => {
-    (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate(
-      'Main',
-      { screen: 'Favorites' },
-    );
-  }, [navigation]);
-
-  const handleStopTTS = useCallback(() => {
-    stopTTS();
-  }, [stopTTS]);
-
-  const handleSetEnglish = useCallback(() => {
-    setRecognitionLanguage('en');
-  }, [setRecognitionLanguage]);
-
-  const handleSetTamil = useCallback(() => {
-    setRecognitionLanguage('ta');
-  }, [setRecognitionLanguage]);
-
   const handleClearChat = useCallback(() => {
     setChatHistory([]);
     setAssistantState('idle');
     stopTTS();
   }, [stopTTS]);
+
+  // Derive angel state from assistant state + TTS
+  const angelState = isSpeaking
+    ? 'speaking' as const
+    : assistantState === 'listening'
+      ? 'listening' as const
+      : assistantState === 'processing'
+        ? 'processing' as const
+        : 'idle' as const;
 
   const verseText = dailyVerse
     ? recognitionLanguage === 'ta'
@@ -507,31 +406,27 @@ export function HomeScreen() {
       ? partialTranscript || transcript || ''
       : '';
 
-  const micIconName: keyof typeof Ionicons.glyphMap =
-    assistantState === 'listening' ? 'mic' : 'mic-outline';
-
   const healthDot =
     aiHealthStatus === 'ok'
-      ? '#4ADE80'
+      ? '#34D399'
       : aiHealthStatus === 'degraded'
         ? '#FBBF24'
         : aiHealthStatus === 'checking'
           ? colors.textSecondary
-          : '#EF4444';
+          : '#FB7185';
+
+  const hasChat = chatHistory.length > 0;
 
   const renderChatMessage = (msg: ChatMessage) => {
     if (msg.type === 'user') {
       return (
         <View
           key={msg.id}
-          style={[
-            styles.chatBubbleUser,
-            { backgroundColor: colors.accent },
-          ]}
+          style={[styles.chatBubbleUser, { backgroundColor: colors.chatUser, borderColor: colors.glassBorder }]}
           accessible={true}
           accessibilityLabel={`You asked: ${msg.text}`}
         >
-          <Text style={[styles.chatBubbleText, { color: '#FFFFFF' }]}>
+          <Text style={[styles.chatBubbleText, { color: colors.text }]}>
             {msg.text}
           </Text>
         </View>
@@ -542,18 +437,19 @@ export function HomeScreen() {
       return (
         <View
           key={msg.id}
-          style={[styles.chatBubbleAssistant, { backgroundColor: 'rgba(239,68,68,0.15)', borderColor: colors.error }]}
+          style={[styles.chatBubbleAssistant, { backgroundColor: 'rgba(251,113,133,0.08)', borderColor: 'rgba(251,113,133,0.2)' }]}
           accessible={true}
           accessibilityRole="alert"
           accessibilityLabel={`Error: ${msg.text}`}
         >
-          <Ionicons name="alert-circle" size={16} color={colors.error} style={{ marginBottom: 4 }} />
-          <Text style={[styles.chatBubbleText, { color: '#FCA5A5' }]}>
-            {msg.text}
-          </Text>
+          <View style={styles.errorRow}>
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
+            <Text style={[styles.chatBubbleText, { color: '#FCA5A5', flex: 1 }]}>
+              {msg.text}
+            </Text>
+          </View>
           <Pressable
             onPress={() => {
-              // Retry: find the last user message before this error
               const idx = chatHistory.findIndex((m) => m.id === msg.id);
               for (let i = idx - 1; i >= 0; i--) {
                 if (chatHistory[i].type === 'user') {
@@ -569,8 +465,8 @@ export function HomeScreen() {
               { backgroundColor: colors.gold, opacity: pressed ? 0.85 : 1 },
             ]}
           >
-            <Ionicons name="refresh-outline" size={14} color="#1A0F3D" />
-            <Text style={[styles.retryPillText, { color: '#1A0F3D' }]}>Retry</Text>
+            <Ionicons name="refresh-outline" size={14} color="#05030E" />
+            <Text style={[styles.retryPillText, { color: '#05030E' }]}>Retry</Text>
           </Pressable>
         </View>
       );
@@ -581,25 +477,18 @@ export function HomeScreen() {
     return (
       <View key={msg.id}>
         <View
-          style={[
-            styles.chatBubbleAssistant,
-            {
-              backgroundColor: 'rgba(255,255,255,0.08)',
-              borderColor: colors.gold,
-            },
-          ]}
+          style={[styles.chatBubbleAssistant, { backgroundColor: colors.chatAssistant, borderColor: colors.glassBorder }]}
           accessible={true}
           accessibilityLabel={`Answer: ${msg.text}`}
         >
           <Text
-            style={[styles.chatBubbleText, { color: '#F5F1FF' }]}
+            style={[styles.chatBubbleText, { color: colors.text }]}
             selectable={true}
           >
             {msg.text}
           </Text>
         </View>
 
-        {/* Verses for this message */}
         {msg.verses && msg.verses.length > 0 ? (
           <View style={styles.chatVersesContainer}>
             {msg.verses.map((v, idx) => {
@@ -608,26 +497,21 @@ export function HomeScreen() {
                   ? v.tamilText || v.englishText
                   : v.englishText || v.tamilText;
               return (
-                <View
+                <Pressable
                   key={`${msg.id}-${v.reference}-${idx}`}
-                  style={[
+                  onPress={() => handleVersePress(v.reference)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${v.reference}. ${display}`}
+                  style={({ pressed }) => [
                     styles.verseListCard,
                     {
-                      backgroundColor: colors.cardElevated,
-                      borderColor: colors.border,
+                      backgroundColor: colors.glass,
+                      borderColor: colors.glassBorder,
+                      opacity: pressed ? 0.85 : 1,
                     },
                   ]}
                 >
-                  <Pressable
-                    onPress={() => handleVersePress(v.reference)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${v.reference}. ${display}`}
-                    accessibilityHint="Double tap to open the verse"
-                    style={({ pressed }) => [
-                      styles.verseCardBody,
-                      { opacity: pressed ? 0.85 : 1 },
-                    ]}
-                  >
+                  <View style={styles.verseCardBody}>
                     <Text style={[styles.verseReference, { color: colors.gold }]}>
                       {v.reference}
                     </Text>
@@ -639,24 +523,16 @@ export function HomeScreen() {
                         {display}
                       </Text>
                     ) : null}
-                    {v.snippet ? (
-                      <Text
-                        style={[styles.verseSnippet, { color: colors.textSecondary }]}
-                        numberOfLines={2}
-                      >
-                        {v.snippet}
-                      </Text>
-                    ) : null}
-                  </Pressable>
+                  </View>
                   <View style={styles.verseFavCorner}>
                     <FavoriteButton
                       reference={v.reference}
                       englishText={v.englishText}
                       tamilText={v.tamilText}
-                      size={22}
+                      size={20}
                     />
                   </View>
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -666,20 +542,19 @@ export function HomeScreen() {
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: colors.background }}>
+    <View style={[styles.root, { backgroundColor: colors.background }]}>
       <LinearGradient
         colors={colors.backdropGradient as unknown as readonly [string, string, ...string[]]}
         start={{ x: 0, y: 0 }}
         end={{ x: 0, y: 1 }}
         style={StyleSheet.absoluteFill}
       />
-      {highContrastMode ? <Starfield count={20} color={colors.gold} /> : null}
+      <Starfield count={24} color={colors.gold} />
 
       <SafeAreaView style={{ flex: 1 }} edges={['top']}>
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           <Animated.View style={{ flex: 1, opacity: screenFade }}>
             <ScrollView
@@ -689,7 +564,7 @@ export function HomeScreen() {
               showsVerticalScrollIndicator={false}
               keyboardShouldPersistTaps="handled"
             >
-              {/* Header row */}
+              {/* Header */}
               <View style={styles.headerRow}>
                 <View style={{ flex: 1 }}>
                   <View style={styles.appNameRow}>
@@ -699,10 +574,7 @@ export function HomeScreen() {
                     >
                       Heavenly Push
                     </Text>
-                    <View
-                      style={[styles.healthDot, { backgroundColor: healthDot }]}
-                      accessibilityLabel={`AI status: ${aiHealthStatus}`}
-                    />
+                    <View style={[styles.healthDot, { backgroundColor: healthDot }]} />
                   </View>
                   <Text style={[styles.greeting, { color: colors.textSecondary }]}>
                     {getGreeting()}
@@ -711,17 +583,13 @@ export function HomeScreen() {
 
                 {/* Language pill */}
                 <View
-                  style={[
-                    styles.langPill,
-                    { borderColor: colors.border, backgroundColor: colors.card },
-                  ]}
+                  style={[styles.langPill, { borderColor: colors.glassBorder, backgroundColor: colors.glass }]}
                   accessibilityRole="radiogroup"
                   accessibilityLabel="Voice language"
                 >
                   <Pressable
-                    onPress={handleSetEnglish}
+                    onPress={() => setRecognitionLanguage('en')}
                     accessibilityRole="radio"
-                    accessibilityLabel="Speak and reply in English"
                     accessibilityState={{ selected: recognitionLanguage === 'en' }}
                     style={[
                       styles.langPillButton,
@@ -735,7 +603,7 @@ export function HomeScreen() {
                       style={[
                         styles.langPillText,
                         {
-                          color: recognitionLanguage === 'en' ? '#FFFFFF' : colors.text,
+                          color: recognitionLanguage === 'en' ? '#FFFFFF' : colors.textSecondary,
                         },
                       ]}
                     >
@@ -743,9 +611,8 @@ export function HomeScreen() {
                     </Text>
                   </Pressable>
                   <Pressable
-                    onPress={handleSetTamil}
+                    onPress={() => setRecognitionLanguage('ta')}
                     accessibilityRole="radio"
-                    accessibilityLabel="Speak and reply in Tamil"
                     accessibilityState={{ selected: recognitionLanguage === 'ta' }}
                     style={[
                       styles.langPillButton,
@@ -759,7 +626,7 @@ export function HomeScreen() {
                       style={[
                         styles.langPillText,
                         {
-                          color: recognitionLanguage === 'ta' ? '#FFFFFF' : colors.text,
+                          color: recognitionLanguage === 'ta' ? '#FFFFFF' : colors.textSecondary,
                         },
                       ]}
                     >
@@ -769,7 +636,7 @@ export function HomeScreen() {
                 </View>
               </View>
 
-              {/* Mic hero (compact when chat has messages) */}
+              {/* Angel Hero */}
               <Pressable
                 onPress={handleMicPress}
                 accessible={true}
@@ -777,158 +644,78 @@ export function HomeScreen() {
                 accessibilityLabel={
                   assistantState === 'listening'
                     ? 'Listening. Double tap to stop.'
-                    : 'Tap to start voice input'
+                    : 'Tap the angel to start voice input'
                 }
                 accessibilityState={{
                   busy: assistantState === 'processing',
                   selected: assistantState === 'listening',
                 }}
-                style={({ pressed }) => [
-                  chatHistory.length > 0 ? styles.heroCardCompact : styles.heroCard,
-                  {
-                    borderColor:
-                      assistantState === 'listening' ? colors.gold : colors.border,
-                    shadowColor: colors.accent,
-                    opacity: pressed ? 0.94 : 1,
-                  },
-                ]}
+                style={styles.angelContainer}
               >
-                <LinearGradient
-                  colors={
-                    colors.heroGradient as unknown as readonly [string, string, ...string[]]
-                  }
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={StyleSheet.absoluteFill}
+                <AngelAvatar
+                  state={angelState}
+                  size={hasChat ? ANGEL_SIZE * 0.65 : ANGEL_SIZE}
+                  glowColor={colors.angelGlow}
+                  accentColor={colors.gold}
                 />
-                <View
-                  style={[styles.heroAccentStrip, { backgroundColor: colors.gold }]}
-                />
-                <View style={chatHistory.length > 0 ? styles.heroContentCompact : styles.heroContent}>
-                  <Halo
-                    size={chatHistory.length > 0 ? MIC_SIZE * 0.6 : MIC_SIZE}
-                    active={assistantState === 'listening'}
-                    color={colors.gold}
-                  >
-                    <Animated.View
-                      style={[
-                        styles.micButton,
-                        {
-                          width: chatHistory.length > 0 ? MIC_SIZE * 0.6 : MIC_SIZE,
-                          height: chatHistory.length > 0 ? MIC_SIZE * 0.6 : MIC_SIZE,
-                          borderRadius: chatHistory.length > 0 ? (MIC_SIZE * 0.6) / 2 : MIC_SIZE / 2,
-                          backgroundColor:
-                            assistantState === 'listening'
-                              ? colors.accentDark
-                              : colors.accent,
-                          shadowColor: colors.gold,
-                          borderColor:
-                            assistantState === 'listening'
-                              ? colors.gold
-                              : 'rgba(255,255,255,0.2)',
-                          transform: [{ scale: micScale }],
-                        },
-                      ]}
-                    >
-                      {assistantState === 'processing' ? (
-                        <ActivityIndicator size="large" color="#FFFFFF" />
-                      ) : (
-                        <Ionicons
-                          name={micIconName}
-                          size={(chatHistory.length > 0 ? MIC_SIZE * 0.6 : MIC_SIZE) * 0.45}
-                          color="#FFFFFF"
-                        />
-                      )}
-                    </Animated.View>
-                  </Halo>
 
-                  {/* Status text */}
-                  {assistantState === 'idle' && chatHistory.length === 0 ? (
-                    <Text style={[styles.statusText, { color: '#F5F1FF' }]}>
-                      {t('home.tapToAsk', { defaultValue: 'Tap to ask or type below' })}
-                    </Text>
-                  ) : assistantState === 'listening' ? (
-                    <Text
-                      style={[styles.statusText, { color: '#F5F1FF' }]}
-                      accessibilityLiveRegion="polite"
-                    >
-                      {t('home.listening', { defaultValue: 'Listening...' })}
-                    </Text>
-                  ) : assistantState === 'processing' ? (
-                    <Text
-                      style={[styles.statusText, { color: '#F5F1FF' }]}
-                      accessibilityLiveRegion="polite"
-                    >
-                      {t('home.thinking', { defaultValue: 'Thinking...' })}
-                    </Text>
-                  ) : null}
+                {/* Status text below angel */}
+                <Text style={[styles.statusText, { color: colors.text }]}>
+                  {assistantState === 'idle' && !hasChat
+                    ? t('home.tapToAsk', { defaultValue: 'Tap the angel to ask' })
+                    : assistantState === 'listening'
+                      ? t('home.listening', { defaultValue: 'I\'m listening...' })
+                      : assistantState === 'processing'
+                        ? t('home.thinking', { defaultValue: 'Let me think...' })
+                        : isSpeaking
+                          ? t('home.speaking', { defaultValue: 'Speaking...' })
+                          : ''}
+                </Text>
 
-                  {/* Partial transcript while listening */}
-                  {displayTranscript ? (
-                    <View
-                      style={[
-                        styles.questionBubble,
-                        {
-                          backgroundColor: 'rgba(255,255,255,0.08)',
-                          borderColor: 'rgba(255,255,255,0.18)',
-                        },
-                      ]}
-                    >
-                      <Text style={[styles.questionText, { color: '#F5F1FF' }]}>
-                        {displayTranscript}
-                      </Text>
-                    </View>
-                  ) : null}
-                </View>
+                {/* Partial transcript */}
+                {displayTranscript ? (
+                  <View style={[styles.transcriptBubble, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+                    <Text style={[styles.transcriptText, { color: colors.text }]}>
+                      "{displayTranscript}"
+                    </Text>
+                  </View>
+                ) : null}
               </Pressable>
 
-              {/* Voice hint (only on first use) */}
-              {assistantState === 'idle' && chatHistory.length === 0 ? (
-                <Text
-                  style={[styles.voiceHints, { color: colors.textSecondary }]}
-                  accessibilityRole="text"
-                >
+              {/* Voice hints (first visit only) */}
+              {assistantState === 'idle' && !hasChat ? (
+                <Text style={[styles.voiceHints, { color: colors.textSecondary }]}>
                   {t('home.voiceHints', {
                     defaultValue:
-                      'Try saying or typing: "Verses about love", "Who is Samuel?", "What does the Bible say about hope?"',
+                      'Try: "Verses about love", "Who is Samuel?", "What does the Bible say about hope?"',
                   })}
                 </Text>
               ) : null}
 
-              {/* Chat history */}
-              {chatHistory.length > 0 ? (
+              {/* Chat History */}
+              {hasChat ? (
                 <View style={styles.chatSection}>
                   <View style={styles.chatHeaderRow}>
-                    <Text
-                      style={[styles.chatSectionTitle, { color: colors.gold }]}
-                      accessibilityRole="header"
-                    >
+                    <Text style={[styles.chatSectionTitle, { color: colors.gold }]} accessibilityRole="header">
                       {t('home.conversation', { defaultValue: 'Conversation' })}
                     </Text>
                     <Pressable
                       onPress={handleClearChat}
                       accessibilityRole="button"
                       accessibilityLabel="Clear conversation"
-                      style={({ pressed }) => [
-                        styles.clearButton,
-                        { opacity: pressed ? 0.7 : 1 },
-                      ]}
+                      style={({ pressed }) => [styles.clearButton, { opacity: pressed ? 0.6 : 1 }]}
                     >
                       <Ionicons name="trash-outline" size={16} color={colors.textSecondary} />
-                      <Text style={[styles.clearButtonText, { color: colors.textSecondary }]}>
-                        Clear
-                      </Text>
                     </Pressable>
                   </View>
                   {chatHistory.map(renderChatMessage)}
 
-                  {/* Processing indicator */}
                   {assistantState === 'processing' ? (
-                    <View style={[styles.chatBubbleAssistant, { backgroundColor: 'rgba(255,255,255,0.05)', borderColor: colors.border }]}>
+                    <View style={[styles.chatBubbleAssistant, { backgroundColor: colors.chatAssistant, borderColor: colors.glassBorder }]}>
                       <View style={styles.typingIndicator}>
                         <ActivityIndicator size="small" color={colors.gold} />
                         <Text style={[styles.typingText, { color: colors.textSecondary }]}>
-                          {t('home.thinking', { defaultValue: 'Thinking...' })}
+                          {t('home.thinking', { defaultValue: 'Let me think...' })}
                         </Text>
                       </View>
                     </View>
@@ -937,64 +724,46 @@ export function HomeScreen() {
               ) : null}
 
               {/* Daily Verse */}
-              <Text
-                style={[styles.sectionTitle, { color: colors.gold }]}
-                accessibilityRole="header"
-              >
+              <Text style={[styles.sectionTitle, { color: colors.gold }]} accessibilityRole="header">
                 {t('home.dailyVerse')}
               </Text>
 
               {dailyLoading ? (
-                <ActivityIndicator
-                  color={colors.accent}
-                  style={{ marginVertical: 16 }}
-                />
+                <ActivityIndicator color={colors.accent} style={{ marginVertical: 16 }} />
               ) : dailyVerse ? (
-                <View
-                  style={[
+                <Pressable
+                  onPress={handleDailyVersePress}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t('home.dailyVerse')}: ${dailyVerse.reference}. ${verseText}`}
+                  style={({ pressed }) => [
                     styles.dailyVerseCard,
                     {
-                      backgroundColor: colors.cardElevated,
-                      borderColor: colors.border,
+                      backgroundColor: colors.glass,
+                      borderColor: colors.glassBorder,
+                      opacity: pressed ? 0.88 : 1,
                     },
                   ]}
                 >
-                  <Pressable
-                    onPress={handleDailyVersePress}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${t('home.dailyVerse')}: ${dailyVerse.reference}. ${verseText}`}
-                    accessibilityHint="Double tap to view the full verse"
-                    style={({ pressed }) => [
-                      styles.dailyVerseBody,
-                      { opacity: pressed ? 0.88 : 1 },
-                    ]}
-                  >
+                  <View style={styles.dailyVerseBody}>
                     <Text style={[styles.verseReference, { color: colors.gold }]}>
                       {dailyVerse.reference}
                     </Text>
-                    <Text
-                      style={[styles.verseText, { color: colors.text }]}
-                      numberOfLines={3}
-                    >
+                    <Text style={[styles.verseText, { color: colors.text }]} numberOfLines={3}>
                       {verseText}
                     </Text>
                     <View style={styles.verseArrow}>
-                      <Ionicons
-                        name="chevron-forward"
-                        size={20}
-                        color={colors.textSecondary}
-                      />
+                      <Ionicons name="chevron-forward" size={18} color={colors.textSecondary} />
                     </View>
-                  </Pressable>
+                  </View>
                   <View style={styles.verseFavCorner}>
                     <FavoriteButton
                       reference={dailyVerse.reference}
                       englishText={dailyVerse.englishText}
                       tamilText={dailyVerse.tamilText}
-                      size={24}
+                      size={22}
                     />
                   </View>
-                </View>
+                </Pressable>
               ) : (
                 <Text style={[styles.noVerse, { color: colors.textSecondary }]}>
                   {t('home.noDailyVerse', { defaultValue: 'No verse available' })}
@@ -1004,19 +773,15 @@ export function HomeScreen() {
               {/* Quick actions */}
               <View style={styles.quickActions}>
                 <Pressable
-                  onPress={handleFavoritesPress}
+                  onPress={() => (navigation as unknown as { navigate: (s: string, p: object) => void }).navigate('Main', { screen: 'Favorites' })}
                   accessibilityRole="button"
-                  accessibilityLabel="Open favorites"
+                  accessibilityLabel="Favorites"
                   style={({ pressed }) => [
                     styles.quickActionPill,
-                    {
-                      backgroundColor: colors.cardElevated,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.85 : 1,
-                    },
+                    { backgroundColor: colors.glass, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
-                  <Ionicons name="heart" size={20} color={colors.gold} />
+                  <Ionicons name="heart" size={18} color={colors.gold} />
                   <Text style={[styles.quickActionText, { color: colors.text }]}>
                     {t('home.favorites', { defaultValue: 'Favorites' })}
                   </Text>
@@ -1024,17 +789,13 @@ export function HomeScreen() {
                 <Pressable
                   onPress={() => navigation.navigate('VoiceCommands')}
                   accessibilityRole="button"
-                  accessibilityLabel={recognitionLanguage === 'ta' ? 'குரல் கட்டளைகள்' : 'Voice Commands'}
+                  accessibilityLabel="Voice Commands"
                   style={({ pressed }) => [
                     styles.quickActionPill,
-                    {
-                      backgroundColor: colors.cardElevated,
-                      borderColor: colors.border,
-                      opacity: pressed ? 0.85 : 1,
-                    },
+                    { backgroundColor: colors.glass, borderColor: colors.glassBorder, opacity: pressed ? 0.85 : 1 },
                   ]}
                 >
-                  <Ionicons name="mic-circle-outline" size={20} color={colors.gold} />
+                  <Ionicons name="mic-circle-outline" size={18} color={colors.gold} />
                   <Text style={[styles.quickActionText, { color: colors.text }]}>
                     {recognitionLanguage === 'ta' ? 'கட்டளைகள்' : 'Commands'}
                   </Text>
@@ -1042,33 +803,25 @@ export function HomeScreen() {
               </View>
             </ScrollView>
 
-            {/* Text input bar — always visible at bottom */}
-            <View
-              style={[
-                styles.inputBar,
-                { backgroundColor: colors.card, borderColor: colors.border },
-              ]}
-            >
+            {/* Input bar */}
+            <View style={[styles.inputBar, { backgroundColor: colors.tabBar, borderColor: colors.glassBorder }]}>
               <TextInput
                 style={[
                   styles.textInput,
                   {
                     color: colors.text,
                     backgroundColor: colors.inputBackground,
-                    borderColor: colors.border,
+                    borderColor: colors.glassBorder,
                   },
                 ]}
                 value={textInput}
                 onChangeText={setTextInput}
-                placeholder={t('home.typeQuestion', {
-                  defaultValue: 'Type a question...',
-                })}
+                placeholder={t('home.typeQuestion', { defaultValue: 'Type a question...' })}
                 placeholderTextColor={colors.placeholder}
                 editable={assistantState !== 'processing'}
                 returnKeyType="send"
                 onSubmitEditing={handleTextSubmit}
                 accessibilityLabel="Type your question"
-                accessibilityHint="Type a question and press send"
                 blurOnSubmit={false}
               />
               <Pressable
@@ -1079,18 +832,15 @@ export function HomeScreen() {
                 style={({ pressed }) => [
                   styles.sendButton,
                   {
-                    backgroundColor:
-                      textInput.trim() && assistantState !== 'processing'
-                        ? colors.gold
-                        : colors.border,
+                    backgroundColor: textInput.trim() ? colors.gold : colors.glass,
                     opacity: pressed ? 0.85 : 1,
                   },
                 ]}
               >
                 <Ionicons
                   name="send"
-                  size={20}
-                  color={textInput.trim() ? '#1A0F3D' : colors.textSecondary}
+                  size={18}
+                  color={textInput.trim() ? '#05030E' : colors.textSecondary}
                 />
               </Pressable>
               <Pressable
@@ -1107,7 +857,7 @@ export function HomeScreen() {
               >
                 <Ionicons
                   name={isListening ? 'mic-off' : 'mic'}
-                  size={20}
+                  size={18}
                   color="#FFFFFF"
                 />
               </Pressable>
@@ -1118,26 +868,24 @@ export function HomeScreen() {
 
       {/* Mini playback bar */}
       {isSpeaking ? (
-        <View
-          style={[
-            styles.miniBar,
-            { backgroundColor: colors.card, borderColor: colors.border },
-          ]}
-          accessible={true}
-          accessibilityLabel="Audio playback active"
-        >
-          <Text
-            style={[styles.miniBarText, { color: colors.text }]}
-            numberOfLines={1}
-          >
-            Playing...
-          </Text>
-          <IconButtonAccessible
-            iconName="stop-circle"
-            onPress={handleStopTTS}
+        <View style={[styles.miniBar, { backgroundColor: colors.tabBar, borderColor: colors.glassBorder }]}>
+          <View style={styles.miniBarContent}>
+            <View style={[styles.speakingDot, { backgroundColor: colors.gold }]} />
+            <Text style={[styles.miniBarText, { color: colors.text }]} numberOfLines={1}>
+              Speaking...
+            </Text>
+          </View>
+          <Pressable
+            onPress={stopTTS}
+            accessibilityRole="button"
             accessibilityLabel="Stop audio"
-            color={colors.error}
-          />
+            style={({ pressed }) => [
+              styles.stopButton,
+              { backgroundColor: 'rgba(251,113,133,0.15)', opacity: pressed ? 0.8 : 1 },
+            ]}
+          >
+            <Ionicons name="stop" size={16} color={colors.error} />
+          </Pressable>
         </View>
       ) : null}
     </View>
@@ -1145,6 +893,9 @@ export function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  root: {
+    flex: 1,
+  },
   scrollView: {
     flex: 1,
   },
@@ -1156,7 +907,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 8,
     gap: 12,
   },
   appNameRow: {
@@ -1165,20 +916,19 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   appName: {
-    fontSize: 30,
+    fontSize: 28,
     fontWeight: '800',
-    marginBottom: 2,
-    letterSpacing: 0.3,
+    letterSpacing: -0.5,
   },
   healthDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    marginBottom: 2,
+    width: 7,
+    height: 7,
+    borderRadius: 3.5,
   },
   greeting: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '400',
+    marginTop: 2,
   },
   langPill: {
     flexDirection: 'row',
@@ -1196,69 +946,30 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   langPillText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700',
   },
-  heroCard: {
-    borderRadius: 28,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.35,
-    shadowRadius: 24,
-    elevation: 12,
-  },
-  heroCardCompact: {
-    borderRadius: 20,
-    borderWidth: 1.5,
-    overflow: 'hidden',
-    marginBottom: 16,
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 16,
-    elevation: 8,
-  },
-  heroAccentStrip: {
-    height: 3,
-    width: '100%',
-    opacity: 0.85,
-  },
-  heroContent: {
-    padding: 28,
+  angelContainer: {
     alignItems: 'center',
-  },
-  heroContentCompact: {
-    padding: 16,
-    alignItems: 'center',
-  },
-  micButton: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    borderWidth: 4,
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.55,
-    shadowRadius: 22,
-    elevation: 16,
+    paddingVertical: 12,
   },
   statusText: {
-    fontSize: 20,
-    fontWeight: '700',
-    marginBottom: 8,
+    fontSize: 17,
+    fontWeight: '600',
+    marginTop: 8,
     textAlign: 'center',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
-  questionBubble: {
-    width: '100%',
-    padding: 12,
+  transcriptBubble: {
+    marginTop: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     borderRadius: 16,
     borderWidth: 1,
-    marginBottom: 8,
+    maxWidth: '85%',
   },
-  questionText: {
-    fontSize: 16,
-    fontWeight: '400',
+  transcriptText: {
+    fontSize: 15,
     fontStyle: 'italic',
     textAlign: 'center',
   },
@@ -1268,7 +979,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontStyle: 'italic',
     marginBottom: 20,
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   chatSection: {
     marginBottom: 20,
@@ -1280,19 +991,12 @@ const styles = StyleSheet.create({
     marginBottom: 12,
   },
   chatSectionTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '800',
-    letterSpacing: 0.3,
+    letterSpacing: 0.2,
   },
   clearButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
     padding: 8,
-  },
-  clearButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
   },
   chatBubbleUser: {
     alignSelf: 'flex-end',
@@ -1300,6 +1004,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 18,
     borderBottomRightRadius: 4,
+    borderWidth: 1,
     marginBottom: 10,
   },
   chatBubbleAssistant: {
@@ -1312,12 +1017,17 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   chatBubbleText: {
-    fontSize: 16,
-    lineHeight: 23,
+    fontSize: 15,
+    lineHeight: 22,
   },
   chatVersesContainer: {
     marginLeft: 8,
     marginBottom: 10,
+  },
+  errorRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
   },
   typingIndicator: {
     flexDirection: 'row',
@@ -1342,10 +1052,10 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: '800',
-    marginBottom: 14,
-    letterSpacing: 0.3,
+    marginBottom: 12,
+    letterSpacing: 0.2,
   },
   dailyVerseCard: {
     borderRadius: 18,
@@ -1356,8 +1066,8 @@ const styles = StyleSheet.create({
     position: 'relative',
   },
   dailyVerseBody: {
-    padding: 18,
-    paddingRight: 56,
+    padding: 16,
+    paddingRight: 48,
   },
   verseListCard: {
     borderRadius: 16,
@@ -1369,24 +1079,17 @@ const styles = StyleSheet.create({
   },
   verseCardBody: {
     padding: 14,
-    paddingRight: 48,
+    paddingRight: 44,
   },
   verseReference: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '800',
-    marginBottom: 6,
+    marginBottom: 4,
     letterSpacing: 0.3,
   },
   verseText: {
-    fontSize: 15,
-    lineHeight: 22,
-    fontWeight: '400',
-  },
-  verseSnippet: {
-    fontSize: 12,
-    lineHeight: 17,
-    marginTop: 4,
-    fontStyle: 'italic',
+    fontSize: 14,
+    lineHeight: 20,
   },
   verseFavCorner: {
     position: 'absolute',
@@ -1395,12 +1098,12 @@ const styles = StyleSheet.create({
   },
   verseArrow: {
     alignSelf: 'flex-end',
-    marginTop: 8,
+    marginTop: 6,
   },
   noVerse: {
-    fontSize: 16,
+    fontSize: 15,
     textAlign: 'center',
-    marginVertical: 20,
+    marginVertical: 16,
   },
   quickActions: {
     flexDirection: 'row',
@@ -1420,7 +1123,7 @@ const styles = StyleSheet.create({
     minHeight: MIN_TOUCH_SIZE,
   },
   quickActionText: {
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
   inputBar: {
@@ -1438,7 +1141,7 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     paddingHorizontal: 16,
     paddingVertical: 10,
-    fontSize: 16,
+    fontSize: 15,
   },
   sendButton: {
     width: MIN_TOUCH_SIZE,
@@ -1452,13 +1155,29 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingVertical: 10,
     borderTopWidth: 1,
-    minHeight: MIN_TOUCH_SIZE + 8,
+  },
+  miniBarContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flex: 1,
+  },
+  speakingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
   },
   miniBarText: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '500',
-    flex: 1,
+  },
+  stopButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });
