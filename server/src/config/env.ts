@@ -17,6 +17,8 @@ interface Config {
   geminiModel: string;
   openrouterApiKey: string;
   openrouterModel: string;
+  supabaseUrl: string;
+  supabaseSecretKey: string;
   englishBibleVersion: string;
   tamilBibleVersion: string;
   port: number;
@@ -41,12 +43,15 @@ function getRequiredEnv(key: string): string {
 }
 
 export const config: Config = {
-  aiProviderPrimary: getEnv('AI_PROVIDER_PRIMARY', 'gemini'),
-  aiProviderSecondary: getEnv('AI_PROVIDER_SECONDARY', 'openrouter'),
+  aiProviderPrimary: getEnv('AI_PROVIDER_PRIMARY', 'openrouter'),
+  aiProviderSecondary: getEnv('AI_PROVIDER_SECONDARY', 'gemini'),
   geminiApiKey: getRequiredEnv('GEMINI_API_KEY'),
   geminiModel: getEnv('GEMINI_MODEL', 'gemini-3.6-flash'),
   openrouterApiKey: getRequiredEnv('OPENROUTER_API_KEY'),
-  openrouterModel: getEnv('OPENROUTER_MODEL', 'google/gemma-4-31b-it:free'),
+  openrouterModel: getEnv('OPENROUTER_MODEL', 'google/gemini-3.1-flash-lite'),
+  // Optional — conversation logging is skipped when these are unset.
+  supabaseUrl: process.env.SUPABASE_URL ?? '',
+  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? '',
   englishBibleVersion: getEnv('ENGLISH_BIBLE_VERSION', 'BSB'),
   tamilBibleVersion: getEnv('TAMIL_BIBLE_VERSION', 'TBSI'),
   port: parseInt(getEnv('PORT', '3001'), 10),

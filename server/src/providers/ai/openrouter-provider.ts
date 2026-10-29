@@ -18,15 +18,20 @@ interface OpenRouterResponse {
 export class OpenRouterProvider implements AiProvider {
   readonly name = 'openrouter';
   private readonly apiUrl = 'https://openrouter.ai/api/v1/chat/completions';
-  private readonly timeoutMs = 30_000;
+  private readonly timeoutMs = 15_000;
 
-  // Multiple free models from different upstream providers for rate-limit resilience
-  private readonly fallbackModels: string[] = [
-    config.openrouterModel,
+  // Free models used when the configured (paid) model fails — e.g. 402 when
+  // the account is out of credits. Their Tamil output is unreliable (mixed
+  // scripts), so Tamil requests skip them and fall through to Gemini instead.
+  private readonly freeFallbackModels = [
     'nvidia/nemotron-3.5-lightning:free',
-    'minimax/minimax-m3:free',
-    'z-ai/glm-5.2:free',
+    'openrouter/free',
   ];
+
+  private modelsFor(input: AiInput): string[] {
+    if (input.language === 'Tamil') return [config.openrouterModel];
+    return Array.from(new Set([config.openrouterModel, ...this.freeFallbackModels]));
+  }
 
   constructor() {
     if (!config.openrouterApiKey) {
@@ -39,22 +44,18 @@ export class OpenRouterProvider implements AiProvider {
 
     let lastError: Error | null = null;
 
-    for (let i = 0; i < this.fallbackModels.length; i++) {
-      const model = this.fallbackModels[i];
+    const models = this.modelsFor(input);
+    for (let i = 0; i < models.length; i++) {
+      const model = models[i];
       // Give fallback models a shorter timeout to fail fast
-      const timeout = i === 0 ? this.timeoutMs : 15_000;
+      const timeout = i === 0 ? this.timeoutMs : 10_000;
       try {
-        const result = await this.callModel(model, systemPrompt, userMessage, timeout);
-        return result;
+        return await this.callModel(model, systemPrompt, userMessage, timeout);
       } catch (err) {
         lastError = err instanceof Error ? err : new Error(String(err));
-        const isTransient = lastError.message.includes('429') || lastError.message.includes('rate') || lastError.message.includes('timed out') || lastError.message.includes('timeout');
-        if (isTransient) {
-          console.warn(`[openrouter] Model ${model} failed (${isTransient ? 'transient' : 'error'}), trying next...`);
-          continue;
-        }
-        // Hard error — don't try other models
-        throw lastError;
+        // A bad key fails the same way on every model — stop early.
+        if (lastError.message.includes('returned 401')) throw lastError;
+        console.warn(`[openrouter] Model ${model} failed: ${lastError.message.slice(0, 200)}. Trying next...`);
       }
     }
 
@@ -80,6 +81,11 @@ export class OpenRouterProvider implements AiProvider {
             { role: 'system', content: systemPrompt },
             { role: 'user', content: userMessage },
           ],
+          // Tamil is token-heavy; leave room for the full JSON answer.
+          max_tokens: 2500,
+          // Free models like Nemotron reason by default and can burn the whole
+          // budget thinking (empty content, ~20s). Answers must be fast.
+          reasoning: { enabled: false },
         }),
         signal: controller.signal,
       });
@@ -104,7 +110,7 @@ export class OpenRouterProvider implements AiProvider {
       return this.parseResponse(content);
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') {
-        throw new Error(`OpenRouter request timed out after ${this.timeoutMs}ms`);
+        throw new Error(`OpenRouter request timed out after ${ms}ms`);
       }
       if (err instanceof Error && err.message.startsWith('OpenRouter')) {
         throw err;
@@ -132,6 +138,7 @@ export class OpenRouterProvider implements AiProvider {
             model: config.openrouterModel,
             messages: [{ role: 'user', content: 'Say "ok"' }],
             max_tokens: 5,
+            reasoning: { enabled: false },
           }),
           signal: controller.signal,
         });

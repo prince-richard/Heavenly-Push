@@ -12,6 +12,7 @@ import { BollsBibleProvider } from '../providers/bible/bolls-bible-provider';
 import { healthCheckAll, getProviderHealth } from '../services/ai-fallback-manager';
 import { config } from '../config/env';
 import { metricsStore } from '../services/metrics-store';
+import { logConversation } from '../services/conversation-log';
 
 const router = Router();
 const bibleProvider = new BollsBibleProvider();
@@ -118,24 +119,44 @@ router.post('/chat', async (req: Request, res: Response) => {
 // POST /api/ai-bible/ask  { question, hintedLanguage? }
 // Returns: { answer, verses[], detectedLanguage, providerUsed }
 router.post('/ask', async (req: Request, res: Response) => {
+  const startedAt = Date.now();
+  const { question, hintedLanguage } = req.body ?? {};
+  const hinted: 'en' | 'ta' | undefined =
+    hintedLanguage === 'ta' ? 'ta' : hintedLanguage === 'en' ? 'en' : undefined;
   try {
-    const { question, hintedLanguage } = req.body;
     if (!question || typeof question !== 'string') {
       res.status(400).json({ error: 'Missing required field: question', code: 'MISSING_QUESTION' });
       return;
     }
-    const result = await askAnything({
-      question,
-      hintedLanguage:
-        hintedLanguage === 'ta' ? 'ta' : hintedLanguage === 'en' ? 'en' : undefined,
-    });
+    const result = await askAnything({ question, hintedLanguage: hinted });
     metricsStore.logAiCall(result.providerUsed, question, undefined, false, true);
+    logConversation({
+      question,
+      questionTranslation: result.questionTranslation,
+      answer: result.answer,
+      language: result.detectedLanguage,
+      provider: result.providerUsed,
+      latencyMs: Date.now() - startedAt,
+      success: true,
+    });
     res.json(result);
   } catch (err) {
-    metricsStore.logAiCall('unknown', req.body?.question ?? '', undefined, false, false);
+    metricsStore.logAiCall('unknown', typeof question === 'string' ? question : '', undefined, false, false);
     const raw = err instanceof Error ? err.message : 'Internal server error';
     console.error('[ai-bible] ask error:', raw);
-    const friendly = friendlyError(err, req.body?.hintedLanguage);
+    if (typeof question === 'string' && question) {
+      logConversation({
+        question,
+        questionTranslation: '',
+        answer: '',
+        language: hinted ?? 'en',
+        provider: 'none',
+        latencyMs: Date.now() - startedAt,
+        success: false,
+        error: raw.slice(0, 500),
+      });
+    }
+    const friendly = friendlyError(err, hinted);
     res.status(500).json({ error: friendly.message, code: friendly.code });
   }
 });

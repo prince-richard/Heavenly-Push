@@ -379,6 +379,8 @@ export interface AskVerse {
 }
 
 export interface AskResult {
+  /** The user's question translated to the other language (en ↔ ta). */
+  questionTranslation: string;
   answer: string;
   verses: AskVerse[];
   detectedLanguage: 'en' | 'ta';
@@ -431,7 +433,13 @@ function extractJsonObject(text: string): string | null {
 
 export async function askAnything(request: AskRequest): Promise<AskResult> {
   const { question } = request;
-  const detected: 'en' | 'ta' = request.hintedLanguage ?? detectLanguage(question);
+  // The script the question is written in wins over the hint: a Tamil-mode
+  // recognizer can still return an English sentence, and that user expects
+  // an English answer. The hint only decides when there are no letters at all.
+  const hasLetters = /[\u0B80-\u0BFFA-Za-z]/.test(question);
+  const detected: 'en' | 'ta' = hasLetters
+    ? detectLanguage(question)
+    : request.hintedLanguage ?? 'en';
   const language = detected === 'ta' ? 'Tamil' : 'English';
 
   const cacheKey = `ask:${question}:${detected}`;
@@ -454,6 +462,7 @@ CRITICAL RULES — you MUST follow these:
 
 Reply with ONLY this JSON shape:
 {
+  "questionTranslation": "The user's question translated into ${detected === 'ta' ? 'English' : 'Tamil'}.",
   "answer": "Your warm, clear conversational answer IN ${language.toUpperCase()}. 2-4 sentences. If they asked about a person (e.g. Samuel), briefly tell who they are and why they matter. If they asked for verses about a topic, briefly introduce them.",
   "verses": [
     {
@@ -484,6 +493,7 @@ Rules for the verses array:
   });
 
   const raw = output.explanation ?? '';
+  let questionTranslation = '';
   let answer = '';
   let verses: AskVerse[] = [];
 
@@ -491,9 +501,13 @@ Rules for the verses array:
   if (jsonStr) {
     try {
       const parsed = JSON.parse(jsonStr) as {
+        questionTranslation?: string;
         answer?: string;
         verses?: Array<Partial<AskVerse>>;
       };
+      if (typeof parsed.questionTranslation === 'string') {
+        questionTranslation = parsed.questionTranslation.trim();
+      }
       if (typeof parsed.answer === 'string') answer = parsed.answer.trim();
       if (Array.isArray(parsed.verses)) {
         verses = parsed.verses
@@ -517,6 +531,7 @@ Rules for the verses array:
   }
 
   const result: AskResult = {
+    questionTranslation,
     answer,
     verses,
     detectedLanguage: detected,

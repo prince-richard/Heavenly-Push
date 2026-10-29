@@ -143,5 +143,19 @@
     "favoriteButton": "Toggle favorite",
     "searchInput": "Search input field",
     "loadingContent": "Content is loading, please wait"
+  },
+  "assistant": {
+    "title": "Heavenly Assistant",
+    "listening": "Listening… ask your question",
+    "youAsked": "You asked",
+    "thinking": "Finding your answer…",
+    "answer": "Answer",
+    "verses": "Verses",
+    "askAgain": "Ask another question",
+    "stopSpeaking": "Stop speaking",
+    "close": "Close assistant",
+    "error": "Sorry, I could not answer that right now.",
+    "tryAgain": "Try again",
+    "wakeHint": "Say \"Prince\" anytime to ask a question"
   }
 }

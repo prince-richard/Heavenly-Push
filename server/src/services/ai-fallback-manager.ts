@@ -55,7 +55,9 @@ function isRetryableError(err: unknown): boolean {
 async function retryWithBackoff(
   provider: AiProvider,
   input: AiInput,
-  maxRetries: number = 1,
+  // No same-provider retry by default: the voice assistant needs a fast
+  // answer, and OpenRouter already walks its own model fallback list.
+  maxRetries: number = 0,
 ): Promise<AiOutput> {
   let lastError: Error | null = null;
   for (let attempt = 0; attempt <= maxRetries; attempt++) {

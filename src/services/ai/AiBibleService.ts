@@ -66,6 +66,8 @@ export interface AskVerse {
 }
 
 export interface AskResponse {
+  /** The question translated to the other language (en ↔ ta). */
+  questionTranslation?: string;
   answer: string;
   verses: AskVerse[];
   detectedLanguage: 'en' | 'ta';

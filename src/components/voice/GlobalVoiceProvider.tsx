@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -19,6 +19,7 @@ import { navigateToTab, navigateToVoiceCommands } from '@/app/navigation/navigat
 import { askAnything } from '@/services/ai/AiBibleService';
 import { useAccessibility } from '@/hooks/useAccessibility';
 import { AngelAvatar } from '@/components/common/AngelAvatar';
+import { AssistantOverlay } from '@/components/voice/AssistantOverlay';
 import {
   TTS_SPEED_STEP,
   MIN_TTS_SPEED,
@@ -28,8 +29,22 @@ import {
 const RESTART_DELAY_MS = 800;
 const ERROR_RESTART_DELAY_MS = 2000;
 
-/** Wake word — user says "Prince" to activate the angel. Case insensitive. */
-const WAKE_WORD_RE = /^(?:prince|பிரின்ஸ்)\b[,.\s:]*/i;
+/**
+ * Wake word — say "Prince" (optionally "Hey Prince") anywhere in a sentence to
+ * open the assistant. Includes common mis-hearings by speech recognizers.
+ * Lookarounds instead of \b so it also works for Tamil script.
+ */
+const WAKE_WORD_RE =
+  /(?:^|[\s,.!?])(?:(?:hey|hi|ok|okay)\s+)?(?:prince|prints|prinz|பிரின்ஸ்)(?=$|[\s,.!?:])[\s,.!?:]*/i;
+
+/** Phrases that dismiss the assistant overlay. */
+const CLOSE_RE = /^(?:close|cancel|exit|done|thank you|thanks|bye|மூடு|நன்றி)[\s.!]*$/i;
+
+function splitWakeWord(text: string): { woke: boolean; rest: string } {
+  const match = WAKE_WORD_RE.exec(text);
+  if (!match) return { woke: false, rest: text.trim() };
+  return { woke: true, rest: text.slice(match.index + match[0].length).trim() };
+}
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ANGEL_OVERLAY_SIZE = Math.min(SCREEN_W * 0.22, 90);
@@ -51,6 +66,12 @@ export function GlobalVoiceProvider({ children }: Props) {
   const setRecognitionLanguage = useVoiceStore((s) => s.setRecognitionLanguage);
   const angelState = useVoiceStore((s) => s.angelState);
   const setAngelState = useVoiceStore((s) => s.setAngelState);
+  const assistantPhase = useVoiceStore((s) => s.assistantPhase);
+  const openAssistant = useVoiceStore((s) => s.openAssistant);
+  const closeAssistant = useVoiceStore((s) => s.closeAssistant);
+  const setAssistantThinking = useVoiceStore((s) => s.setAssistantThinking);
+  const setAssistantAnswer = useVoiceStore((s) => s.setAssistantAnswer);
+  const setAssistantError = useVoiceStore((s) => s.setAssistantError);
 
   // Settings
   const primaryLanguage = useSettingsStore((s) => s.primaryLanguage);
@@ -70,20 +91,40 @@ export function GlobalVoiceProvider({ children }: Props) {
   const recognitionLanguageRef = useRef(recognitionLanguage);
   const isProcessingRef = useRef(false);
   const isSpeakingRef = useRef(false);
+  /** Incremented per question so a late answer for a dismissed question is dropped. */
+  const askSeqRef = useRef(0);
+  const scheduleRestartRef = useRef<(delay: number) => void>(() => {});
 
-  // Track TTS speaking state to update angel
+  const speak = useCallback((text: string, lang: 'en' | 'ta') => {
+    setAngelState('speaking');
+    void ttsService.speak(text, lang, useSettingsStore.getState().ttsSpeed).catch(() => {});
+  }, [setAngelState]);
+
+  // Track TTS speaking state to update angel, and resume listening once
+  // speech finishes (the mic stays off while speaking to avoid hearing itself).
   useEffect(() => {
-    const interval = setInterval(() => {
-      const speaking = ttsService.isSpeaking();
+    const poll = async () => {
+      let speaking = ttsService.isSpeaking();
+      // Some engines (notably Chrome on web) occasionally never fire the
+      // utterance's end callback. Ask the engine directly so the mic can't
+      // stay off forever.
+      if (speaking && ttsService.speakingForMs() > 1500 && !(await ttsService.isSpeakingAsync())) {
+        await ttsService.stop();
+        speaking = false;
+      }
       if (speaking !== isSpeakingRef.current) {
         isSpeakingRef.current = speaking;
         if (speaking) {
           setAngelState('speaking');
         } else if (!isProcessingRef.current) {
           setAngelState(useVoiceStore.getState().isListening ? 'listening' : 'idle');
+          if (alwaysOnRef.current && !useVoiceStore.getState().isListening) {
+            scheduleRestartRef.current(RESTART_DELAY_MS);
+          }
         }
       }
-    }, 200);
+    };
+    const interval = setInterval(() => void poll(), 200);
     return () => clearInterval(interval);
   }, [setAngelState]);
 
@@ -100,6 +141,24 @@ export function GlobalVoiceProvider({ children }: Props) {
       setRecognitionLanguage(primaryLanguage);
     }
   }, [primaryLanguage, setRecognitionLanguage]);
+
+  const handlePartial = useCallback(
+    (text: string) => {
+      const { woke, rest } = splitWakeWord(text);
+      const phase = useVoiceStore.getState().assistantPhase;
+      if (phase === 'closed') {
+        if (!woke) return; // ambient speech — don't show anything
+        // Wake immediately on the partial result so the overlay feels instant.
+        openAssistant();
+        void ttsService.stop();
+        if (useSettingsStore.getState().hapticsEnabled) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+        }
+      }
+      setPartialTranscript(rest);
+    },
+    [openAssistant, setPartialTranscript],
+  );
 
   const startSession = useCallback(async () => {
     if (!mountedRef.current || isProcessingRef.current || isSpeakingRef.current) return;
@@ -120,7 +179,7 @@ export function GlobalVoiceProvider({ children }: Props) {
       cleanupFns.current.push(
         speechService.onPartialResult((text) => {
           if (mountedRef.current) {
-            setPartialTranscript(text);
+            handlePartial(text);
           }
         }),
       );
@@ -128,7 +187,7 @@ export function GlobalVoiceProvider({ children }: Props) {
       cleanupFns.current.push(
         speechService.onFinalResult((text) => {
           if (mountedRef.current) {
-            handleFinalTranscript(text);
+            handleFinalTranscriptRef.current(text);
           }
         }),
       );
@@ -136,13 +195,15 @@ export function GlobalVoiceProvider({ children }: Props) {
       cleanupFns.current.push(
         speechService.onError((err) => {
           if (mountedRef.current) {
-            if (err !== 'no-speech') {
+            if (err !== 'no-speech' && err !== 'aborted') {
               setError(err);
             }
             setListening(false);
-            setAngelState('idle');
+            if (!isProcessingRef.current && !isSpeakingRef.current) {
+              setAngelState('idle');
+            }
             if (alwaysOnRef.current) {
-              scheduleRestart(ERROR_RESTART_DELAY_MS);
+              scheduleRestartRef.current(ERROR_RESTART_DELAY_MS);
             }
           }
         }),
@@ -156,7 +217,7 @@ export function GlobalVoiceProvider({ children }: Props) {
               setAngelState('idle');
             }
             if (alwaysOnRef.current && !isProcessingRef.current) {
-              scheduleRestart(RESTART_DELAY_MS);
+              scheduleRestartRef.current(RESTART_DELAY_MS);
             }
           }
         }),
@@ -170,10 +231,10 @@ export function GlobalVoiceProvider({ children }: Props) {
       setListening(false);
       setAngelState('idle');
       if (alwaysOnRef.current) {
-        scheduleRestart(ERROR_RESTART_DELAY_MS);
+        scheduleRestartRef.current(ERROR_RESTART_DELAY_MS);
       }
     }
-  }, [setListening, setError, setPartialTranscript, setAngelState]);
+  }, [setListening, setError, setPartialTranscript, setAngelState, handlePartial]);
 
   const scheduleRestart = useCallback((delay: number) => {
     if (restartTimerRef.current) {
@@ -186,6 +247,7 @@ export function GlobalVoiceProvider({ children }: Props) {
       }
     }, delay);
   }, [startSession]);
+  scheduleRestartRef.current = scheduleRestart;
 
   // --- Auto-start on mount ---
   useEffect(() => {
@@ -208,33 +270,102 @@ export function GlobalVoiceProvider({ children }: Props) {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const handleAskAi = useCallback(
+    (question: string) => {
+      const lang = recognitionLanguageRef.current;
+      const seq = ++askSeqRef.current;
+      isProcessingRef.current = true;
+      // Show what was heard right away, before the AI round-trip.
+      setAssistantThinking(question);
+      setAngelState('processing');
+      void ttsService.stop();
+
+      askAnything(question, lang)
+        .then((res) => {
+          if (!mountedRef.current || seq !== askSeqRef.current) return;
+          if (useVoiceStore.getState().assistantPhase === 'closed') return;
+          setLastAiAnswer(res.answer, res.detectedLanguage);
+          setAssistantAnswer(res.answer, res.verses ?? [], res.questionTranslation ?? '');
+          speak(res.answer, res.detectedLanguage);
+          AccessibilityInfo.announceForAccessibility(res.answer.slice(0, 200));
+        })
+        .catch((err: unknown) => {
+          if (!mountedRef.current || seq !== askSeqRef.current) return;
+          if (useVoiceStore.getState().assistantPhase === 'closed') return;
+          const errorMsg = err instanceof Error && err.message
+            ? err.message
+            : lang === 'ta'
+              ? 'மன்னிக்கவும், இப்போது பதிலளிக்க முடியவில்லை.'
+              : 'Sorry, I could not answer that right now.';
+          setAssistantError(errorMsg);
+          speak(errorMsg, lang);
+        })
+        .finally(() => {
+          if (seq !== askSeqRef.current) return;
+          isProcessingRef.current = false;
+          if (alwaysOnRef.current && mountedRef.current) {
+            scheduleRestart(RESTART_DELAY_MS);
+          }
+        });
+    },
+    [setLastAiAnswer, setAngelState, setAssistantThinking, setAssistantAnswer, setAssistantError, speak, scheduleRestart],
+  );
+
+  const announceAndRestart = useCallback(
+    (msg: string) => {
+      AccessibilityInfo.announceForAccessibility(msg);
+      scheduleRestart(RESTART_DELAY_MS);
+    },
+    [scheduleRestart],
+  );
+
+  const dismissAssistant = useCallback(() => {
+    askSeqRef.current++; // drop any in-flight answer
+    isProcessingRef.current = false;
+    void ttsService.stop();
+    setSpeakingStatus('idle');
+    setPartialTranscript('');
+    closeAssistant();
+    setAngelState(useVoiceStore.getState().isListening ? 'listening' : 'idle');
+    scheduleRestart(RESTART_DELAY_MS);
+  }, [closeAssistant, setAngelState, setPartialTranscript, setSpeakingStatus, scheduleRestart]);
+
   const handleFinalTranscript = useCallback(
     (text: string) => {
       if (!mountedRef.current || !text.trim()) return;
 
-      let query = text.trim();
+      const { woke, rest } = splitWakeWord(text);
+      const engaged = useVoiceStore.getState().assistantPhase !== 'closed';
+      setPartialTranscript('');
 
-      // Check for wake word "Prince"
-      const hasWakeWord = WAKE_WORD_RE.test(query);
-      if (hasWakeWord) {
-        // Strip wake word
-        query = query.replace(WAKE_WORD_RE, '').trim();
-        // Navigate to Home when wake word is used
-        navigateToTab('Home');
+      // Always-on mic: ignore background speech unless the wake word was
+      // said or the assistant is already open waiting for a question.
+      if (!woke && !engaged) {
+        scheduleRestart(RESTART_DELAY_MS);
+        return;
       }
 
-      // If only the wake word was said with nothing after, just acknowledge
-      if (!query) {
-        if (hasWakeWord) {
-          setAngelState('speaking');
-          const lang = recognitionLanguageRef.current;
-          const greeting = lang === 'ta'
-            ? 'சொல்லுங்கள், நான் கேட்கிறேன்.'
-            : 'Yes, I\'m listening.';
-          void ttsService.speak(greeting, lang);
-          AccessibilityInfo.announceForAccessibility(greeting);
+      if (!engaged) {
+        openAssistant();
+        if (hapticsEnabled) {
+          void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         }
+      }
+
+      const query = rest;
+
+      // Only the wake word — prompt for the question and keep listening.
+      if (!query) {
+        openAssistant();
+        const greeting = recognitionLanguageRef.current === 'ta' ? 'சொல்லுங்கள்.' : 'Yes?';
+        speak(greeting, recognitionLanguageRef.current);
+        AccessibilityInfo.announceForAccessibility(greeting);
         scheduleRestart(RESTART_DELAY_MS);
+        return;
+      }
+
+      if (CLOSE_RE.test(query)) {
+        dismissAssistant();
         return;
       }
 
@@ -251,10 +382,15 @@ export function GlobalVoiceProvider({ children }: Props) {
       if (!parsed) {
         // No command matched — send as AI question
         setQuery(query);
-        navigateToTab('Home');
         handleAskAi(query);
         return;
       }
+
+      // Navigation commands leave the assistant so the target screen is visible.
+      const navigate = (fn: () => void) => {
+        dismissAssistant();
+        fn();
+      };
 
       switch (parsed.command) {
         case 'search':
@@ -263,16 +399,21 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'searchInEnglish':
           if (parsed.args) {
             setQuery(parsed.args);
-            navigateToTab('Home');
             handleAskAi(parsed.args);
+          } else {
+            scheduleRestart(RESTART_DELAY_MS);
           }
           break;
 
         case 'stop':
-          void ttsService.stop();
-          setSpeakingStatus('idle');
-          setAngelState('idle');
-          announceAndRestart('Stopped.');
+          if (ttsService.isSpeaking()) {
+            void ttsService.stop();
+            setSpeakingStatus('idle');
+            setAngelState('idle');
+            announceAndRestart('Stopped.');
+          } else {
+            dismissAssistant();
+          }
           break;
 
         case 'repeat': {
@@ -280,8 +421,7 @@ export function GlobalVoiceProvider({ children }: Props) {
           const answer = state.lastAiAnswer;
           const lang = state.lastAiLanguage ?? recognitionLanguageRef.current;
           if (answer) {
-            setAngelState('speaking');
-            void ttsService.speak(answer, lang);
+            speak(answer, lang);
           }
           scheduleRestart(RESTART_DELAY_MS);
           break;
@@ -290,8 +430,9 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'repeatFrom':
         case 'repeatVerse':
           if (parsed.args) {
-            navigateToTab('Home');
             handleAskAi(`Read verse ${parsed.args}`);
+          } else {
+            scheduleRestart(RESTART_DELAY_MS);
           }
           break;
 
@@ -323,26 +464,22 @@ export function GlobalVoiceProvider({ children }: Props) {
 
         case 'openHome':
         case 'openSearch':
-          navigateToTab('Home');
-          scheduleRestart(RESTART_DELAY_MS);
+          navigate(() => navigateToTab('Home'));
           break;
 
         case 'openFavorites':
         case 'listSaved':
         case 'readSaved':
-          navigateToTab('Favorites');
-          scheduleRestart(RESTART_DELAY_MS);
+          navigate(() => navigateToTab('Favorites'));
           break;
 
         case 'openSettings':
-          navigateToTab('Settings');
-          scheduleRestart(RESTART_DELAY_MS);
+          navigate(() => navigateToTab('Settings'));
           break;
 
         case 'openVoiceHelp':
         case 'help':
-          navigateToVoiceCommands();
-          scheduleRestart(RESTART_DELAY_MS);
+          navigate(() => navigateToVoiceCommands());
           break;
 
         case 'saveVerse':
@@ -355,13 +492,13 @@ export function GlobalVoiceProvider({ children }: Props) {
         case 'share':
         case 'recordReflection':
         case 'startMemorization':
-          scheduleRestart(RESTART_DELAY_MS);
+          // Screen-specific commands — handled by the screen behind the overlay.
+          navigate(() => {});
           break;
 
         default:
           // Unrecognized command — treat as question
           setQuery(query);
-          navigateToTab('Home');
           handleAskAi(query);
           break;
       }
@@ -370,74 +507,60 @@ export function GlobalVoiceProvider({ children }: Props) {
       setTranscript,
       setListening,
       setQuery,
+      setPartialTranscript,
       setSpeakingStatus,
-      setLastAiAnswer,
       setAngelState,
       setRecognitionLanguage,
+      openAssistant,
       ttsSpeed,
       setTtsSpeed,
       hapticsEnabled,
       scheduleRestart,
+      handleAskAi,
+      announceAndRestart,
+      dismissAssistant,
+      speak,
     ],
   );
+  // Speech callbacks are registered once per session; read the latest handler.
+  const handleFinalTranscriptRef = useRef(handleFinalTranscript);
+  handleFinalTranscriptRef.current = handleFinalTranscript;
 
-  const handleAskAi = useCallback(
-    (question: string) => {
-      const lang = recognitionLanguageRef.current;
-      isProcessingRef.current = true;
-      setAngelState('processing');
-      void ttsService.stop();
+  /** Open the assistant and start listening for a question right away. */
+  const listenForQuestion = useCallback(async () => {
+    if (hapticsEnabled) {
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    }
+    askSeqRef.current++;
+    isProcessingRef.current = false;
+    await ttsService.stop();
+    isSpeakingRef.current = false;
+    openAssistant();
+    if (restartTimerRef.current) {
+      clearTimeout(restartTimerRef.current);
+      restartTimerRef.current = null;
+    }
+    await speechService.cancelListening().catch(() => {});
+    await startSession();
+  }, [hapticsEnabled, openAssistant, startSession]);
 
-      askAnything(question, lang)
-        .then((res) => {
-          if (!mountedRef.current) return;
-          setLastAiAnswer(res.answer, res.detectedLanguage);
-          setAngelState('speaking');
-          void ttsService.speak(res.answer, res.detectedLanguage);
-          AccessibilityInfo.announceForAccessibility(res.answer.slice(0, 200));
-        })
-        .catch(() => {
-          if (!mountedRef.current) return;
-          const errorMsg = lang === 'ta'
-            ? 'மன்னிக்கவும், இப்போது பதிலளிக்க முடியவில்லை.'
-            : 'Sorry, I could not answer that right now.';
-          setAngelState('speaking');
-          void ttsService.speak(errorMsg, lang);
-        })
-        .finally(() => {
-          isProcessingRef.current = false;
-          if (alwaysOnRef.current && mountedRef.current) {
-            scheduleRestart(RESTART_DELAY_MS);
-          }
-        });
-    },
-    [setLastAiAnswer, setAngelState, scheduleRestart],
-  );
+  const stopSpeaking = useCallback(() => {
+    void ttsService.stop();
+    setSpeakingStatus('idle');
+  }, [setSpeakingStatus]);
 
-  const announceAndRestart = useCallback(
-    (msg: string) => {
-      AccessibilityInfo.announceForAccessibility(msg);
-      scheduleRestart(RESTART_DELAY_MS);
-    },
-    [scheduleRestart],
-  );
-
-  // Tap angel to manually trigger/stop
+  // Tap angel to open the assistant (or stop listening if already open)
   const handleAngelPress = useCallback(async () => {
-    if (isListening) {
+    if (isListening && assistantPhase !== 'closed') {
       try {
         await speechService.stopListening();
       } catch { /* ok */ }
       setListening(false);
       setAngelState('idle');
     } else {
-      if (hapticsEnabled) {
-        void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-      }
-      navigateToTab('Home');
-      await startSession();
+      await listenForQuestion();
     }
-  }, [isListening, startSession, setListening, setAngelState, hapticsEnabled]);
+  }, [isListening, assistantPhase, listenForQuestion, setListening, setAngelState]);
 
   // Status label for the angel
   const statusLabel =
@@ -453,45 +576,45 @@ export function GlobalVoiceProvider({ children }: Props) {
     <View style={{ flex: 1 }}>
       {children}
 
-      {/* Floating Angel Overlay — always visible */}
-      <View style={styles.angelOverlay} pointerEvents="box-none">
-        <Pressable
-          onPress={handleAngelPress}
-          accessibilityRole="button"
-          accessibilityLabel={
-            angelState === 'listening'
-              ? 'Angel is listening. Tap to stop.'
-              : angelState === 'processing'
-                ? 'Angel is thinking.'
-                : angelState === 'speaking'
-                  ? 'Angel is speaking. Tap to interrupt.'
-                  : 'Tap the angel to start voice input. Or say Prince to activate.'
-          }
-          style={styles.angelPressable}
-        >
-          <AngelAvatar
-            state={angelState}
-            size={ANGEL_OVERLAY_SIZE}
-            glowColor={colors.angelGlow}
-            accentColor={colors.accent}
-          />
-        </Pressable>
+      {/* Floating Angel — always visible while the assistant is closed */}
+      {assistantPhase === 'closed' ? (
+        <View style={styles.angelOverlay} pointerEvents="box-none">
+          <Pressable
+            onPress={handleAngelPress}
+            accessibilityRole="button"
+            accessibilityLabel="Open the assistant. Or say Prince anytime to ask a question."
+            style={styles.angelPressable}
+          >
+            <AngelAvatar
+              state={angelState}
+              size={ANGEL_OVERLAY_SIZE}
+              glowColor={colors.angelGlow}
+              accentColor={colors.accent}
+            />
+          </Pressable>
 
-        {/* Status text */}
-        {statusLabel ? (
-          <View style={[styles.statusBadge, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
-            <View style={[styles.statusDot, {
-              backgroundColor:
-                angelState === 'listening' ? colors.accent
-                : angelState === 'processing' ? colors.accentLight
-                : colors.success,
-            }]} />
-            <Text style={[styles.statusText, { color: colors.text }]}>
-              {statusLabel}
-            </Text>
-          </View>
-        ) : null}
-      </View>
+          {/* Status text */}
+          {statusLabel ? (
+            <View style={[styles.statusBadge, { backgroundColor: colors.glass, borderColor: colors.glassBorder }]}>
+              <View style={[styles.statusDot, {
+                backgroundColor:
+                  angelState === 'listening' ? colors.accent
+                  : angelState === 'processing' ? colors.accentLight
+                  : colors.success,
+              }]} />
+              <Text style={[styles.statusText, { color: colors.text }]}>
+                {statusLabel}
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <AssistantOverlay
+        onClose={dismissAssistant}
+        onAskAgain={() => void listenForQuestion()}
+        onStopSpeaking={stopSpeaking}
+      />
     </View>
   );
 }

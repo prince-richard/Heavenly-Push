@@ -12,6 +12,7 @@ const LANGUAGE_MAP: Record<SupportedLanguage, string> = {
 };
 
 let currentlySpeaking = false;
+let speakingSince = 0;
 
 /**
  * Speak text with the given language and speed.
@@ -29,6 +30,7 @@ async function speak(
 
   return new Promise<void>((resolve, reject) => {
     currentlySpeaking = true;
+    speakingSince = Date.now();
     Speech.speak(text, {
       language: LANGUAGE_MAP[language],
       rate: Math.max(0.5, Math.min(2.0, speed)),
@@ -96,6 +98,13 @@ function isSpeaking(): boolean {
 }
 
 /**
+ * How long the current utterance has been marked as speaking, in ms (0 if idle).
+ */
+function speakingForMs(): number {
+  return currentlySpeaking ? Date.now() - speakingSince : 0;
+}
+
+/**
  * Async check if TTS is speaking (uses expo-speech API).
  */
 async function isSpeakingAsync(): Promise<boolean> {
@@ -113,4 +122,5 @@ export const ttsService = {
   resume,
   isSpeaking,
   isSpeakingAsync,
+  speakingForMs,
 };
