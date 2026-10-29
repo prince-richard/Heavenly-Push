@@ -18,13 +18,13 @@ export interface ConversationLogEntry {
  * keeps the Vercel function alive until the insert finishes.
  */
 export function logConversation(entry: ConversationLogEntry): void {
-  if (!config.supabaseUrl || !config.supabaseSecretKey) return;
+  if (!config.supabaseUrl || !config.supabaseKey) return;
 
   const insert = fetch(`${config.supabaseUrl}/rest/v1/conversations`, {
     method: 'POST',
     headers: {
-      apikey: config.supabaseSecretKey,
-      Authorization: `Bearer ${config.supabaseSecretKey}`,
+      apikey: config.supabaseKey,
+      Authorization: `Bearer ${config.supabaseKey}`,
       'Content-Type': 'application/json',
       Prefer: 'return=minimal',
     },

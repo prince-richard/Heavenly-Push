@@ -18,7 +18,7 @@ interface Config {
   openrouterApiKey: string;
   openrouterModel: string;
   supabaseUrl: string;
-  supabaseSecretKey: string;
+  supabaseKey: string;
   englishBibleVersion: string;
   tamilBibleVersion: string;
   port: number;
@@ -51,7 +51,9 @@ export const config: Config = {
   openrouterModel: getEnv('OPENROUTER_MODEL', 'google/gemini-3.1-flash-lite'),
   // Optional — conversation logging is skipped when these are unset.
   supabaseUrl: process.env.SUPABASE_URL ?? '',
-  supabaseSecretKey: process.env.SUPABASE_SECRET_KEY ?? '',
+  // Secret key preferred; the publishable key works too via the table's
+  // insert-only RLS policy (see supabase/migrations).
+  supabaseKey: process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_PUBLISHABLE_KEY || '',
   englishBibleVersion: getEnv('ENGLISH_BIBLE_VERSION', 'BSB'),
   tamilBibleVersion: getEnv('TAMIL_BIBLE_VERSION', 'TBSI'),
   port: parseInt(getEnv('PORT', '3001'), 10),
